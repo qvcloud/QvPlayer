@@ -33,6 +33,15 @@ struct VideoThumbnailView: View {
     }
     
     private func generateThumbnail() async {
+        // 0. Check Cache
+        if let cachedImage = CacheManager.shared.getThumbnail(for: url) {
+            await MainActor.run {
+                self.image = cachedImage
+                self.isLoading = false
+            }
+            return
+        }
+        
         DebugLogger.shared.info("Generating thumbnail for: \(url.lastPathComponent)")
         
         // 1. Try AVAssetImageGenerator first (Fastest, Native)
@@ -56,6 +65,10 @@ struct VideoThumbnailView: View {
             await MainActor.run {
                 self.image = UIImage(cgImage: cgImage)
                 self.isLoading = false
+                // Save to cache
+                if let image = self.image {
+                    CacheManager.shared.saveThumbnail(image: image, for: url)
+                }
             }
         } catch {
             DebugLogger.shared.warning("AVAssetImageGenerator failed for \(url.lastPathComponent): \(error.localizedDescription). Retrying with KSPlayer...")
@@ -74,6 +87,10 @@ struct VideoThumbnailView: View {
                 await MainActor.run {
                     self.image = first.image
                     self.isLoading = false
+                    // Save to cache
+                    if let image = self.image {
+                        CacheManager.shared.saveThumbnail(image: image, for: url)
+                    }
                 }
                 DebugLogger.shared.info("KSPlayer thumbnail success for: \(url.lastPathComponent)")
             } else {

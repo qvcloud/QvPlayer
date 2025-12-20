@@ -53,24 +53,32 @@ class PlayerViewModel: ObservableObject {
         let center = NotificationCenter.default
         
         observers.append(center.addObserver(forName: .commandPlay, object: nil, queue: .main) { [weak self] _ in
-            guard let self = self, self.player != nil else { return }
-            self.play()
+            Task { @MainActor in
+                guard let self = self, self.player != nil else { return }
+                self.play()
+            }
         })
         
         observers.append(center.addObserver(forName: .commandPause, object: nil, queue: .main) { [weak self] _ in
-            guard let self = self, self.player != nil else { return }
-            self.pause()
+            Task { @MainActor in
+                guard let self = self, self.player != nil else { return }
+                self.pause()
+            }
         })
         
         observers.append(center.addObserver(forName: .commandToggle, object: nil, queue: .main) { [weak self] _ in
-            guard let self = self, self.player != nil else { return }
-            self.togglePlayPause()
+            Task { @MainActor in
+                guard let self = self, self.player != nil else { return }
+                self.togglePlayPause()
+            }
         })
         
         observers.append(center.addObserver(forName: .commandSeek, object: nil, queue: .main) { [weak self] notification in
-            guard let self = self, self.player != nil else { return }
-            if let seconds = notification.userInfo?["seconds"] as? Double {
-                self.seek(by: seconds)
+            Task { @MainActor in
+                guard let self = self, self.player != nil else { return }
+                if let seconds = notification.userInfo?["seconds"] as? Double {
+                    self.seek(by: seconds)
+                }
             }
         })
     }
@@ -132,50 +140,62 @@ class PlayerViewModel: ObservableObject {
         }
         
         // Observe Item Status
-        itemStatusObserver = playerItem.observe(\.status) { item, _ in
+        itemStatusObserver = playerItem.observe(\.status) { [weak self] item, _ in
+            guard let self = self else { return }
             switch item.status {
             case .readyToPlay:
                 print("✅ [Player Status] Ready to play")
                 DebugLogger.shared.info("Player Status: Ready to play")
                 
-                let videoTracks = item.asset.tracks(withMediaType: .video)
-                if let track = videoTracks.first {
-                    print("📹 [Player] Video track found: \(track)")
-                    
-                    // Log Codec Info
-                    for format in track.formatDescriptions {
-                        let mediaSubType = CMFormatDescriptionGetMediaSubType(format as! CMFormatDescription)
-                        let codecString =  String(format: "%c%c%c%c",
-                                                  (mediaSubType >> 24) & 0xff,
-                                                  (mediaSubType >> 16) & 0xff,
-                                                  (mediaSubType >> 8) & 0xff,
-                                                  mediaSubType & 0xff)
-                        print("   Codec: \(codecString)")
-                        DebugLogger.shared.info("Video Codec: \(codecString)")
-                        
-                        // Check for AV1 (av01) which might not be supported by AVPlayer on all devices
-                        if codecString == "av01" {
-                            let msg = "⚠️ AV1 Codec detected. System player may not support video. Please switch to KSPlayer."
-                            print(msg)
-                            DebugLogger.shared.warning(msg)
-                            Task { @MainActor in
-                                self.errorMessage = msg
+                Task {
+                    do {
+                        let videoTracks = try await item.asset.loadTracks(withMediaType: .video)
+                        if let track = videoTracks.first {
+                            print("📹 [Player] Video track found: \(track)")
+                            
+                            // Log Codec Info
+                            let formatDescriptions = try await track.load(.formatDescriptions)
+                            for format in formatDescriptions {
+                                let mediaSubType = CMFormatDescriptionGetMediaSubType(format)
+                                let codecString =  String(format: "%c%c%c%c",
+                                                          (mediaSubType >> 24) & 0xff,
+                                                          (mediaSubType >> 16) & 0xff,
+                                                          (mediaSubType >> 8) & 0xff,
+                                                          mediaSubType & 0xff)
+                                print("   Codec: \(codecString)")
+                                DebugLogger.shared.info("Video Codec: \(codecString)")
+                                
+                                // Check for AV1 (av01) which might not be supported by AVPlayer on all devices
+                                if codecString == "av01" {
+                                    let msg = "⚠️ AV1 Codec detected. System player may not support video. Please switch to KSPlayer."
+                                    print(msg)
+                                    DebugLogger.shared.warning(msg)
+                                    await MainActor.run {
+                                        self.errorMessage = msg
+                                    }
+                                }
                             }
+                            
+                            let isEnabled = try await track.load(.isEnabled)
+                            let isSelfContained = try await track.load(.isSelfContained)
+                            let estimatedDataRate = try await track.load(.estimatedDataRate)
+                            
+                            print("   Enabled: \(isEnabled)")
+                            print("   Self Contained: \(isSelfContained)")
+                            print("   Estimated Data Rate: \(estimatedDataRate)")
+                            
+                            // Check presentation size
+                            print("   Presentation Size: \(item.presentationSize)")
+                            if item.presentationSize == .zero {
+                                DebugLogger.shared.warning("Player ready but presentation size is zero!")
+                            }
+                        } else {
+                            print("⚠️ [Player] No video track found!")
+                            DebugLogger.shared.warning("No video track found!")
                         }
+                    } catch {
+                        print("❌ [Player] Failed to load tracks: \(error)")
                     }
-                    
-                    print("   Enabled: \(track.isEnabled)")
-                    print("   Self Contained: \(track.isSelfContained)")
-                    print("   Estimated Data Rate: \(track.estimatedDataRate)")
-                    
-                    // Check presentation size
-                    print("   Presentation Size: \(item.presentationSize)")
-                    if item.presentationSize == .zero {
-                        DebugLogger.shared.warning("Player ready but presentation size is zero!")
-                    }
-                } else {
-                    print("⚠️ [Player] No video track found!")
-                    DebugLogger.shared.warning("No video track found!")
                 }
             case .failed:
                 if let error = item.error {
@@ -268,6 +288,13 @@ class PlayerViewModel: ObservableObject {
         let currentTime = player.currentTime()
         let newTime = CMTimeAdd(currentTime, CMTimeMakeWithSeconds(seconds, preferredTimescale: 600))
         player.seek(to: newTime)
+    }
+    
+    func stop() {
+        pause()
+        player = nil
+        statusTimer?.invalidate()
+        statusTimer = nil
     }
     
     private func startStatusBroadcasting() {

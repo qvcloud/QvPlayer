@@ -11,6 +11,16 @@ class DebugLogger: ObservableObject {
         let type: LogType
     }
     
+    struct VideoStats {
+        var resolution: String = "-"
+        var fps: Double = 0.0
+        var bitrate: Double = 0.0
+        var codec: String = "-"
+        var dropFrames: Int = 0
+        var downloadSpeed: Double = 0.0
+        var bufferDuration: Double = 0.0
+    }
+    
     enum LogType {
         case info
         case warning
@@ -26,6 +36,7 @@ class DebugLogger: ObservableObject {
     }
     
     @Published var logs: [LogEntry] = []
+    @Published var videoStats: VideoStats = VideoStats()
     @AppStorage("showDebugOverlay") var showDebugOverlay = false
     
     private init() {}

@@ -1,9 +1,11 @@
 import Foundation
+import UIKit
 
 class CacheManager {
     static let shared = CacheManager()
     private let fileManager = FileManager.default
     private let cacheDirectoryName = "VideoCache"
+    private let thumbnailDirectoryName = "VideoThumbnails"
     
     private var cacheDirectory: URL {
         let paths = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
@@ -12,6 +14,15 @@ class CacheManager {
             try? fileManager.createDirectory(at: cacheDir, withIntermediateDirectories: true)
         }
         return cacheDir
+    }
+    
+    private var thumbnailDirectory: URL {
+        let paths = fileManager.urls(for: .cachesDirectory, in: .userDomainMask)
+        let thumbDir = paths[0].appendingPathComponent(thumbnailDirectoryName)
+        if !fileManager.fileExists(atPath: thumbDir.path) {
+            try? fileManager.createDirectory(at: thumbDir, withIntermediateDirectories: true)
+        }
+        return thumbDir
     }
     
     func getCachedFileURL(for remoteURL: URL) -> URL {
@@ -84,5 +95,42 @@ class CacheManager {
         let fileURL = getCachedFileURL(for: url)
         DebugLogger.shared.info("Removing cached video: \(fileURL.lastPathComponent)")
         try? fileManager.removeItem(at: fileURL)
+    }
+    
+    // MARK: - Thumbnail Caching
+    
+    func getThumbnailURL(for remoteURL: URL) -> URL {
+        // Use a hash or safe filename for the thumbnail
+        let filename = remoteURL.lastPathComponent + ".jpg"
+        return thumbnailDirectory.appendingPathComponent(filename)
+    }
+    
+    func saveThumbnail(image: UIImage, for remoteURL: URL) {
+        let fileURL = getThumbnailURL(for: remoteURL)
+        if let data = image.jpegData(compressionQuality: 0.7) {
+            do {
+                try data.write(to: fileURL)
+                DebugLogger.shared.info("Thumbnail saved to: \(fileURL.path)")
+            } catch {
+                DebugLogger.shared.error("Failed to save thumbnail: \(error)")
+            }
+        }
+    }
+    
+    func getThumbnail(for remoteURL: URL) -> UIImage? {
+        let fileURL = getThumbnailURL(for: remoteURL)
+        if fileManager.fileExists(atPath: fileURL.path),
+           let data = try? Data(contentsOf: fileURL) {
+            return UIImage(data: data)
+        }
+        return nil
+    }
+    
+    func removeThumbnail(for remoteURL: URL) {
+        let fileURL = getThumbnailURL(for: remoteURL)
+        if fileManager.fileExists(atPath: fileURL.path) {
+            DebugLogger.shared.info("Removing cached thumbnail: \(fileURL.lastPathComponent)")
+            try? fileManager.removeItem(at: fileURL)
+        }
     }
 }

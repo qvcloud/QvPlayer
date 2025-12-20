@@ -55,7 +55,7 @@ struct HomeView: View {
                                             if video.cachedURL == nil {
                                                 Button {
                                                     Task {
-                                                        try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
+                                                        _ = try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
                                                         NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
                                                     }
                                                 } label: {

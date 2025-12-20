@@ -67,6 +67,11 @@ class PlaylistManager: ObservableObject {
         }
         let video = videos[index]
         DebugLogger.shared.info("Deleting video: \(video.title)")
+        
+        // Clear cache and thumbnail
+        CacheManager.shared.removeCachedVideo(url: video.url)
+        CacheManager.shared.removeThumbnail(for: video.url)
+        
         videos.remove(at: index)
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         savePlaylist(content: newContent)

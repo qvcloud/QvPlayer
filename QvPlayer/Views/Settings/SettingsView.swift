@@ -73,7 +73,7 @@ struct SettingsView: View {
             
             Section(header: Text("LAN Management")) {
                 Toggle("Enable Web Manager", isOn: $webServerEnabled)
-                    .onChange(of: webServerEnabled) { newValue in
+                    .onChange(of: webServerEnabled) { _, newValue in
                         if newValue {
                             WebServer.shared.start()
                         } else {

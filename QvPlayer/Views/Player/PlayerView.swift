@@ -140,8 +140,7 @@ struct PlayerView: View {
             viewModel.load(video: video)
         }
         .onDisappear {
-            viewModel.pause()
-            viewModel.player = nil
+            viewModel.stop()
         }
     }
     

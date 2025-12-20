@@ -18,17 +18,12 @@ struct KSPlayerView: UIViewRepresentable {
         playerView.backgroundColor = .black
         
         #if canImport(KSPlayer)
-        let options = KSOptions()
-        // KSOptions.isAutoPlay = true // Global setting if needed
+        let options = createOptions()
         
-        // Performance Optimizations
-        options.hardwareDecode = true // Enable Hardware Acceleration (VideoToolbox)
-        options.isSecondOpen = true   // Enable fast open
+        // Use cached URL if available, otherwise use remote URL
+        let targetURL = video.cachedURL ?? video.url
         
-        // Network optimizations
-        // options.timeout = 30 // Not available
-        
-        if let url = URL(string: video.url.absoluteString) {
+        if let url = URL(string: targetURL.absoluteString) {
             let playerLayer = KSPlayerLayer(url: url, options: options)
             if let view = playerLayer.player.view {
                 view.frame = playerView.bounds
@@ -53,13 +48,29 @@ struct KSPlayerView: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         #if canImport(KSPlayer)
         if let playerLayer = context.coordinator.playerLayer {
-            if playerLayer.url.absoluteString != video.url.absoluteString {
-                let options = KSOptions()
-                playerLayer.set(url: video.url, options: options)
+            let targetURL = video.cachedURL ?? video.url
+            if playerLayer.url.absoluteString != targetURL.absoluteString {
+                let options = createOptions()
+                playerLayer.set(url: targetURL, options: options)
             }
         }
         #endif
     }
+    
+    #if canImport(KSPlayer)
+    private func createOptions() -> KSOptions {
+        let options = KSOptions()
+        // Performance Optimizations
+        options.hardwareDecode = true // Enable Hardware Acceleration (VideoToolbox)
+        options.isSecondOpen = true   // Enable fast open
+        
+        // Network optimizations
+        options.cache = true
+        // Increase buffer size to avoid stuttering on network videos
+        options.maxBufferDuration = 20 
+        return options
+    }
+    #endif
     
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         #if canImport(KSPlayer)
@@ -80,6 +91,8 @@ struct KSPlayerView: UIViewRepresentable {
             }
         }
         private var statusTimer: Timer?
+        private var lastBytesRead: Int64 = 0
+        private var lastSpeedCheckTime: TimeInterval = 0
         
         override init() {
             super.init()
@@ -98,19 +111,34 @@ struct KSPlayerView: UIViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeek(_:)), name: .commandSeek, object: nil)
         }
         
-        @objc private func handlePlay() { playerLayer?.play() }
-        @objc private func handlePause() { playerLayer?.pause() }
+        @objc private func handlePlay() { 
+            playerLayer?.play()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.broadcastStatus()
+            }
+        }
+        @objc private func handlePause() { 
+            playerLayer?.pause()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.broadcastStatus()
+            }
+        }
         @objc private func handleToggle() {
             if playerLayer?.player.isPlaying == true {
                 playerLayer?.pause()
             } else {
                 playerLayer?.play()
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                self.broadcastStatus()
+            }
         }
         @objc private func handleSeek(_ notification: Notification) {
             if let seconds = notification.userInfo?["seconds"] as? Double {
                 let current = playerLayer?.player.currentPlaybackTime ?? 0
-                playerLayer?.seek(time: current + seconds, autoPlay: true, completion: { _ in })
+                playerLayer?.seek(time: current + seconds, autoPlay: true, completion: { _ in 
+                    self.broadcastStatus()
+                })
             }
         }
         
@@ -123,13 +151,56 @@ struct KSPlayerView: UIViewRepresentable {
         
         private func broadcastStatus() {
             guard let playerLayer = playerLayer else { return }
+            let player = playerLayer.player
+            
             let status: [String: Any] = [
-                "isPlaying": playerLayer.player.isPlaying,
+                "isPlaying": player.isPlaying,
                 "title": playerLayer.url.lastPathComponent,
-                "currentTime": playerLayer.player.currentPlaybackTime,
-                "duration": playerLayer.player.duration
+                "currentTime": player.currentPlaybackTime,
+                "duration": player.duration
             ]
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
+            
+            // Update Debug Stats
+            Task { @MainActor in
+                var stats = DebugLogger.shared.videoStats
+                let size = player.naturalSize
+                stats.resolution = "\(Int(size.width))x\(Int(size.height))"
+                stats.bufferDuration = max(0, player.playableTime - player.currentPlaybackTime)
+                
+                // FPS
+                stats.fps = Double(player.nominalFrameRate)
+                
+                // Track Info
+                if let track = player.tracks(mediaType: .video).first(where: { $0.isEnabled }) {
+                     stats.codec = track.description
+                     stats.bitrate = Double(track.bitRate)
+                }
+                
+                // Calculate Download Speed
+                if let dynamicInfo = player.dynamicInfo {
+                    let currentBytes = dynamicInfo.bytesRead
+                    let currentTime = Date().timeIntervalSince1970
+                    
+                    if self.lastSpeedCheckTime > 0 {
+                        let timeDelta = currentTime - self.lastSpeedCheckTime
+                        if timeDelta > 0.5 { // Update if enough time passed
+                            let bytesDelta = currentBytes - self.lastBytesRead
+                            // bytes per second
+                            let speed = Double(bytesDelta) / timeDelta
+                            stats.downloadSpeed = max(0, speed)
+                            
+                            self.lastBytesRead = currentBytes
+                            self.lastSpeedCheckTime = currentTime
+                        }
+                    } else {
+                        self.lastBytesRead = currentBytes
+                        self.lastSpeedCheckTime = currentTime
+                    }
+                }
+                
+                DebugLogger.shared.videoStats = stats
+            }
         }
         #else
         var playerLayer: Any?
