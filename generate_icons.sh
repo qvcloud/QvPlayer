@@ -124,11 +124,20 @@ echo "Processing App Icon (Back Layer)..."
 mkdir -p "$TARGET_DIR"
 # 清理旧的 png 文件
 rm -f "$TARGET_DIR"/*.png
-# 这里我们简单地复用 logo，但通常建议用纯色。
-# 如果你想用纯色，可以手动替换。这里为了脚本简单，我们把 logo 模糊放大作为背景，或者直接用 logo。
-# 为了稳妥，我们再次使用 logo，但在实际设计中，背景层通常是纯色或纹理。
-sips -s format jpeg -z 240 400 "$SOURCE" --out "$TARGET_DIR/Content.jpg" > /dev/null
-sips -s format jpeg -z 480 800 "$SOURCE" --out "$TARGET_DIR/Content@2x.jpg" > /dev/null
+
+# 使用 sips 生成纯白背景 (先缩小到 1x1，再填充白色到目标尺寸)
+# 1. 生成 1x1 的临时文件
+sips -s format jpeg -z 1 1 "$SOURCE" --out temp_1x1.jpg > /dev/null
+
+# 2. 填充白色到 400x240 (1x)
+sips -s format jpeg -p 240 400 --padColor FFFFFF temp_1x1.jpg --out "$TARGET_DIR/Content.jpg" > /dev/null
+
+# 3. 填充白色到 800x480 (2x)
+sips -s format jpeg -p 480 800 --padColor FFFFFF temp_1x1.jpg --out "$TARGET_DIR/Content@2x.jpg" > /dev/null
+
+# 清理临时文件
+rm temp_1x1.jpg
+
 cat > "$TARGET_DIR/Contents.json" <<EOF
 {
   "images" : [
@@ -200,7 +209,12 @@ TARGET_DIR="$ASSETS_DIR/App Icon - App Store.imagestack/Back.imagestacklayer/Con
 mkdir -p "$TARGET_DIR"
 # 清理旧的 png 文件
 rm -f "$TARGET_DIR"/*.png
-sips -s format jpeg -z 768 1280 "$SOURCE" --out "$TARGET_DIR/Content.jpg" > /dev/null
+
+# 使用 sips 生成纯白背景
+sips -s format jpeg -z 1 1 "$SOURCE" --out temp_1x1.jpg > /dev/null
+sips -s format jpeg -p 768 1280 --padColor FFFFFF temp_1x1.jpg --out "$TARGET_DIR/Content.jpg" > /dev/null
+rm temp_1x1.jpg
+
 cat > "$TARGET_DIR/Contents.json" <<EOF
 {
   "images" : [
