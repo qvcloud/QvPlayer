@@ -10,6 +10,7 @@ struct PlayerView: View {
     @State private var showControls = false
     @State private var tipsMessage: String?
     @State private var showTips = false
+    @State private var autoHideTask: DispatchWorkItem?
     
     enum FocusField {
         case rewind, playPause, fastForward, ksPlayer
@@ -59,7 +60,14 @@ struct PlayerView: View {
         }
         .onChange(of: showControls) { _, newValue in
             if newValue {
-                // Auto-hide logic could go here if we didn't force focus
+                resetAutoHideTimer()
+            } else {
+                cancelAutoHideTimer()
+            }
+        }
+        .onChange(of: focusedField) { _, newValue in
+            if newValue == .rewind || newValue == .playPause || newValue == .fastForward {
+                resetAutoHideTimer()
             }
         }
         .onChange(of: viewModel.errorMessage) { _, newValue in
@@ -92,8 +100,14 @@ struct PlayerView: View {
             .overlay(alignment: .bottom) {
                 playerControls(
                     isPlaying: ksIsPlaying,
-                    onPlayPause: { NotificationCenter.default.post(name: .commandToggle, object: nil) },
-                    onSeek: { NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": $0]) }
+                    onPlayPause: { 
+                        NotificationCenter.default.post(name: .commandToggle, object: nil)
+                        resetAutoHideTimer()
+                    },
+                    onSeek: { 
+                        NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": $0])
+                        resetAutoHideTimer()
+                    }
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: .playerStatusDidUpdate)) { notification in
@@ -128,8 +142,14 @@ struct PlayerView: View {
                     .overlay(alignment: .bottom) {
                         playerControls(
                             isPlaying: viewModel.isPlaying,
-                            onPlayPause: { viewModel.togglePlayPause() },
-                            onSeek: { viewModel.seek(by: $0) }
+                            onPlayPause: { 
+                                viewModel.togglePlayPause()
+                                resetAutoHideTimer()
+                            },
+                            onSeek: { 
+                                viewModel.seek(by: $0)
+                                resetAutoHideTimer()
+                            }
                         )
                     }
             } else {
@@ -178,8 +198,8 @@ struct PlayerView: View {
             }
         }
         .padding(.bottom, 60)
-        .opacity(showControls || focusedField != nil ? 1 : 0)
-        .animation(.easeInOut, value: showControls || (focusedField != nil))
+        .opacity(showControls || (focusedField != nil && focusedField != .ksPlayer) ? 1 : 0)
+        .animation(.easeInOut, value: showControls || (focusedField != nil && focusedField != .ksPlayer))
     }
     
     // MARK: - Helpers
@@ -202,7 +222,9 @@ struct PlayerView: View {
         showControls.toggle()
         if showControls {
             focusedField = .playPause
+            resetAutoHideTimer()
         } else {
+            cancelAutoHideTimer()
             if engine == "ksplayer" {
                 focusedField = .ksPlayer
             } else {
@@ -223,5 +245,26 @@ struct PlayerView: View {
                 self.showTips = false
             }
         }
+    }
+    
+    func resetAutoHideTimer() {
+        autoHideTask?.cancel()
+        let task = DispatchWorkItem {
+            withAnimation {
+                showControls = false
+                if playerEngine == "ksplayer" {
+                    focusedField = .ksPlayer
+                } else {
+                    focusedField = nil
+                }
+            }
+        }
+        autoHideTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: task)
+    }
+    
+    func cancelAutoHideTimer() {
+        autoHideTask?.cancel()
+        autoHideTask = nil
     }
 }

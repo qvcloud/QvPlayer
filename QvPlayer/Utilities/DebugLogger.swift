@@ -37,6 +37,8 @@ class DebugLogger: ObservableObject {
     
     @Published var logs: [LogEntry] = []
     @Published var videoStats: VideoStats = VideoStats()
+    @Published var serverURL: String = "Stopped"
+    @Published var lastRemoteCommand: String = "-"
     @AppStorage("showDebugOverlay") var showDebugOverlay = false
     
     private init() {}

@@ -40,11 +40,29 @@ struct DebugOverlayView: View {
                             }
                             GridRow {
                                 StatRow(title: "Buffer", value: String(format: "%.1f s", logger.videoStats.bufferDuration))
-                                StatRow(title: "Speed", value: String(format: "%.2f MB/s", logger.videoStats.downloadSpeed))
+                                StatRow(title: "Speed", value: String(format: "%.2f MB/s", logger.videoStats.downloadSpeed / 1024 / 1024))
                             }
                             GridRow {
                                 StatRow(title: "Dropped", value: "\(logger.videoStats.dropFrames)")
                                 Color.clear
+                            }
+                        }
+                        .padding(.bottom, 5)
+                    }
+                    
+                    // Remote Control Stats
+                    Group {
+                        Text("Remote Control")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.blue)
+                            .padding(.bottom, 1)
+                        
+                        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 2) {
+                            GridRow {
+                                StatRow(title: "Server", value: logger.serverURL)
+                            }
+                            GridRow {
+                                StatRow(title: "Last Cmd", value: logger.lastRemoteCommand)
                             }
                         }
                         .padding(.bottom, 5)

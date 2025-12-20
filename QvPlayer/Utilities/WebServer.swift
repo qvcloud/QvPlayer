@@ -86,6 +86,13 @@ class WebServer {
         print("Server ready on port \(self.port)")
         DebugLogger.shared.info("Server ready on port \(self.port)")
         
+        if let ip = getIPAddress() {
+            let url = "http://\(ip):\(port)"
+            DispatchQueue.main.async {
+                DebugLogger.shared.serverURL = url
+            }
+        }
+        
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in
             self?.acceptConnection()
@@ -100,6 +107,9 @@ class WebServer {
         if listeningFD != -1 {
             close(listeningFD)
             listeningFD = -1
+        }
+        DispatchQueue.main.async {
+            DebugLogger.shared.serverURL = "Stopped"
         }
         // Close all client connections
         for client in clients.values {
@@ -228,37 +238,40 @@ class WebServer {
         // Only convert to string if needed, and be careful with binary data
         let bodyString = String(data: bodyData, encoding: .utf8) ?? ""
         
-        print("Request: \(method) \(path)")
+        if path != "/api/v1/status" {
+            print("Request: \(method) \(path)")
+            DebugLogger.shared.info("REQ: \(method) \(path)")
+        }
         
         if method == "GET" && path == "/" {
             sendResponse(client: client, body: WebAssets.htmlContent)
-        } else if method == "GET" && path == "/api/docs" {
+        } else if method == "GET" && path == "/api/v1/docs" {
              sendResponse(client: client, body: WebAssets.apiDocsContent)
         } 
         // MARK: - API Endpoints
-        else if method == "GET" && (path == "/api/playlist" || path == "/api/videos") {
+        else if method == "GET" && (path == "/api/v1/playlist" || path == "/api/v1/videos") {
             handleGetVideos(client: client)
-        } else if method == "GET" && path == "/api/status" {
+        } else if method == "GET" && path == "/api/v1/status" {
             handleGetStatus(client: client)
-        } else if method == "POST" && path == "/api/videos" {
+        } else if method == "POST" && path == "/api/v1/videos" {
             handleAddVideo(client: client, body: bodyString)
-        } else if method == "DELETE" && path == "/api/videos" {
+        } else if method == "DELETE" && path == "/api/v1/videos" {
             handleDeleteVideo(client: client, queryItems: queryItems)
-        } else if method == "PUT" && path == "/api/videos" {
+        } else if method == "PUT" && path == "/api/v1/videos" {
             handleUpdateVideo(client: client, queryItems: queryItems, body: bodyString)
-        } else if method == "POST" && path == "/api/playlist" {
+        } else if method == "POST" && path == "/api/v1/playlist" {
             handleReplacePlaylist(client: client, body: bodyString)
         }
         // MARK: - Control Endpoints
-        else if method == "POST" && path.hasPrefix("/api/control/") {
+        else if method == "POST" && path.hasPrefix("/api/v1/control/") {
             handleControl(client: client, path: path, queryItems: queryItems)
         }
         // MARK: - Upload Endpoint
-        else if method == "POST" && path == "/api/upload" {
+        else if method == "POST" && path == "/api/v1/upload" {
             handleUpload(client: client, headers: headersString, body: bodyData)
         }
         // MARK: - Legacy / Form Endpoints
-        else if method == "POST" && path == "/api/delete" {
+        else if method == "POST" && path == "/api/v1/delete" {
             // Legacy form support
             let params = parseParams(bodyString)
             if let indexStr = params["index"], let index = Int(indexStr) {
@@ -267,7 +280,7 @@ class WebServer {
             } else {
                 sendResponse(client: client, status: "400 Bad Request", body: "Missing index")
             }
-        } else if method == "POST" && path == "/api/edit" {
+        } else if method == "POST" && path == "/api/v1/edit" {
             // Legacy form support
             let params = parseParams(bodyString)
             if let indexStr = params["index"], let index = Int(indexStr),
@@ -385,7 +398,11 @@ class WebServer {
     }
     
     private func handleControl(client: Client, path: String, queryItems: [URLQueryItem]) {
-        let action = path.replacingOccurrences(of: "/api/control/", with: "")
+        let action = path.replacingOccurrences(of: "/api/v1/control/", with: "")
+        
+        DispatchQueue.main.async {
+            DebugLogger.shared.lastRemoteCommand = action
+        }
         
         switch action {
         case "play":

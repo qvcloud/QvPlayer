@@ -92,6 +92,7 @@ struct KSPlayerView: UIViewRepresentable {
         }
         private var statusTimer: Timer?
         private var lastBytesRead: Int64 = 0
+        private var lastPlayableTime: TimeInterval = 0
         private var lastSpeedCheckTime: TimeInterval = 0
         
         override init() {
@@ -178,25 +179,41 @@ struct KSPlayerView: UIViewRepresentable {
                 }
                 
                 // Calculate Download Speed
+                let currentTime = Date().timeIntervalSince1970
+                var currentBytes: Int64 = 0
                 if let dynamicInfo = player.dynamicInfo {
-                    let currentBytes = dynamicInfo.bytesRead
-                    let currentTime = Date().timeIntervalSince1970
-                    
-                    if self.lastSpeedCheckTime > 0 {
-                        let timeDelta = currentTime - self.lastSpeedCheckTime
-                        if timeDelta > 0.5 { // Update if enough time passed
-                            let bytesDelta = currentBytes - self.lastBytesRead
-                            // bytes per second
-                            let speed = Double(bytesDelta) / timeDelta
-                            stats.downloadSpeed = max(0, speed)
-                            
-                            self.lastBytesRead = currentBytes
-                            self.lastSpeedCheckTime = currentTime
+                    currentBytes = dynamicInfo.bytesRead
+                }
+                
+                let currentPlayableTime = player.playableTime
+                
+                if self.lastSpeedCheckTime > 0 {
+                    let timeDelta = currentTime - self.lastSpeedCheckTime
+                    if timeDelta > 0.5 { // Update if enough time passed
+                        // Method 1: bytesRead
+                        let bytesDelta = currentBytes - self.lastBytesRead
+                        var speed = Double(bytesDelta) / timeDelta
+                        
+                        // Method 2: Fallback to buffer growth
+                        if speed <= 0 && stats.bitrate > 0 {
+                            let playableDelta = currentPlayableTime - self.lastPlayableTime
+                            // Only consider reasonable positive growth (ignore seeks)
+                            if playableDelta > 0 && playableDelta < 50 {
+                                let estimatedBytes = playableDelta * (stats.bitrate / 8.0)
+                                speed = estimatedBytes / timeDelta
+                            }
                         }
-                    } else {
+                        
+                        stats.downloadSpeed = max(0, speed)
+                        
                         self.lastBytesRead = currentBytes
+                        self.lastPlayableTime = currentPlayableTime
                         self.lastSpeedCheckTime = currentTime
                     }
+                } else {
+                    self.lastBytesRead = currentBytes
+                    self.lastPlayableTime = currentPlayableTime
+                    self.lastSpeedCheckTime = currentTime
                 }
                 
                 DebugLogger.shared.videoStats = stats
