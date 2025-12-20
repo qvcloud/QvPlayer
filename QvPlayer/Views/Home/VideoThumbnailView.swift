@@ -1,5 +1,8 @@
 import SwiftUI
 import AVFoundation
+#if canImport(KSPlayer)
+import KSPlayer
+#endif
 
 struct VideoThumbnailView: View {
     let url: URL
@@ -53,9 +56,36 @@ struct VideoThumbnailView: View {
             }
         } catch {
             print("Thumbnail generation failed for \(url): \(error)")
-            await MainActor.run {
-                self.isLoading = false
-            }
+            await generateThumbnailWithFFmpeg()
         }
+    }
+
+    private func generateThumbnailWithFFmpeg() async {
+        #if canImport(KSPlayer)
+        print("📸 [Thumbnail] Attempting KSPlayer fallback for: \(url.lastPathComponent)")
+        // Use KSPlayer's ThumbnailController
+        let controller = ThumbnailController(thumbnailCount: 1)
+        do {
+            let thumbnails = try await controller.generateThumbnail(for: url)
+            if let first = thumbnails.first {
+                await MainActor.run {
+                    self.image = first.image
+                    self.isLoading = false
+                }
+                print("✅ [Thumbnail] KSPlayer success")
+            } else {
+                print("❌ [Thumbnail] KSPlayer returned no thumbnails")
+                await MainActor.run { self.isLoading = false }
+            }
+        } catch {
+            print("❌ [Thumbnail] KSPlayer failed: \(error)")
+            await MainActor.run { self.isLoading = false }
+        }
+        #else
+        print("❌ [Thumbnail] KSPlayer not available for fallback")
+        await MainActor.run {
+            self.isLoading = false
+        }
+        #endif
     }
 }
