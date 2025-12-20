@@ -24,6 +24,16 @@ class WebServer {
     private var listeningFD: Int32 = -1
     private var listeningSource: DispatchSourceRead?
     
+    private var currentStatus: [String: Any] = ["isPlaying": false, "title": "Idle", "currentTime": 0, "duration": 0]
+    
+    private init() {
+        NotificationCenter.default.addObserver(forName: .playerStatusDidUpdate, object: nil, queue: nil) { [weak self] notification in
+            if let status = notification.userInfo?["status"] as? [String: Any] {
+                self?.currentStatus = status
+            }
+        }
+    }
+    
     var serverURL: String? {
         if let ip = getIPAddress() {
             return "http://\(ip):\(port)"
@@ -170,8 +180,10 @@ class WebServer {
                 
                 if !contentLengthFound {
                     client.expectedContentLength = 0
-                    print("⚠️ [WebServer] Content-Length not found in headers")
-                    // print("Headers: \(headersString)") // Uncomment for debugging
+                    // Only warn if it's a POST/PUT request where we might expect a body
+                    if headersString.uppercased().contains("POST ") || headersString.uppercased().contains("PUT ") {
+                        print("⚠️ [WebServer] Content-Length not found in headers for POST/PUT")
+                    }
                 }
                 
                 client.headersReceived = true
@@ -222,6 +234,8 @@ class WebServer {
         // MARK: - API Endpoints
         else if method == "GET" && (path == "/api/playlist" || path == "/api/videos") {
             handleGetVideos(client: client)
+        } else if method == "GET" && path == "/api/status" {
+            handleGetStatus(client: client)
         } else if method == "POST" && path == "/api/videos" {
             handleAddVideo(client: client, body: bodyString)
         } else if method == "DELETE" && path == "/api/videos" {
@@ -292,6 +306,15 @@ class WebServer {
         let videos = PlaylistManager.shared.getPlaylistVideos()
         let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
         if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
+           let jsonString = String(data: data, encoding: .utf8) {
+            sendResponse(client: client, contentType: "application/json", body: jsonString)
+        } else {
+            sendResponse(client: client, status: "500 Internal Server Error", body: "{}")
+        }
+    }
+    
+    private func handleGetStatus(client: Client) {
+        if let data = try? JSONSerialization.data(withJSONObject: currentStatus),
            let jsonString = String(data: data, encoding: .utf8) {
             sendResponse(client: client, contentType: "application/json", body: jsonString)
         } else {
@@ -565,6 +588,11 @@ class WebServer {
                 <h1>QvPlayer Manager</h1>
                 
                 <h2>Remote Control</h2>
+                <div id="playerStatus" style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="font-weight: bold; margin-bottom: 5px;">Status: <span id="statusText">Idle</span></div>
+                    <div style="font-size: 0.9em; color: #666;">Now Playing: <span id="nowPlayingText">-</span></div>
+                    <div style="font-size: 0.9em; color: #666;">Time: <span id="timeText">00:00 / 00:00</span></div>
+                </div>
                 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                     <button onclick="control('play')">Play</button>
                     <button onclick="control('pause')">Pause</button>
@@ -759,6 +787,41 @@ class WebServer {
                         .replace(/"/g, "&quot;")
                         .replace(/'/g, "&#039;");
                 }
+                
+                function updateStatus() {
+                    fetch('/api/status')
+                        .then(response => response.json())
+                        .then(data => {
+                            const statusText = document.getElementById('statusText');
+                            const nowPlayingText = document.getElementById('nowPlayingText');
+                            const timeText = document.getElementById('timeText');
+                            
+                            if (statusText) {
+                                statusText.textContent = data.isPlaying ? 'Playing' : 'Paused';
+                                statusText.style.color = data.isPlaying ? '#28a745' : '#dc3545';
+                            }
+                            
+                            if (nowPlayingText) {
+                                nowPlayingText.textContent = data.title || '-';
+                            }
+                            
+                            const formatTime = (seconds) => {
+                                if (!seconds) return '00:00';
+                                const m = Math.floor(seconds / 60);
+                                const s = Math.floor(seconds % 60);
+                                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                            };
+                            
+                            if (timeText) {
+                                timeText.textContent = `${formatTime(data.currentTime)} / ${formatTime(data.duration)}`;
+                            }
+                        })
+                        .catch(console.error);
+                }
+                
+                // Poll every 1 second
+                setInterval(updateStatus, 1000);
+                updateStatus();
                 
                 loadPlaylist();
             </script>

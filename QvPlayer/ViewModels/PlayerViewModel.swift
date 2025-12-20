@@ -6,7 +6,11 @@ import CoreMedia
 @MainActor
 class PlayerViewModel: ObservableObject {
     @Published var player: AVPlayer?
-    @Published var isPlaying: Bool = false
+    @Published var isPlaying: Bool = false {
+        didSet {
+            broadcastStatus()
+        }
+    }
     @Published var isBuffering: Bool = false
     @Published var currentVideo: Video?
     @Published var errorMessage: String?
@@ -16,6 +20,7 @@ class PlayerViewModel: ObservableObject {
     private var rateObserver: NSKeyValueObservation?
     private var itemStatusObserver: NSKeyValueObservation?
     private var waitingReasonObserver: NSKeyValueObservation?
+    private var statusTimer: Timer?
     
     init() {
         // Setup audio session for playback
@@ -156,6 +161,7 @@ class PlayerViewModel: ObservableObject {
         
         // Auto play on load
         play()
+        startStatusBroadcasting()
     }
     
     func play() {
@@ -181,5 +187,29 @@ class PlayerViewModel: ObservableObject {
         let currentTime = player.currentTime()
         let newTime = CMTimeAdd(currentTime, CMTimeMakeWithSeconds(seconds, preferredTimescale: 600))
         player.seek(to: newTime)
+    }
+    
+    private func startStatusBroadcasting() {
+        statusTimer?.invalidate()
+        statusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.broadcastStatus()
+            }
+        }
+    }
+    
+    private func broadcastStatus() {
+        let duration = player?.currentItem?.duration.seconds ?? 0
+        let status: [String: Any] = [
+            "isPlaying": isPlaying,
+            "title": currentVideo?.title ?? "Idle",
+            "currentTime": player?.currentTime().seconds ?? 0,
+            "duration": duration.isNaN ? 0 : duration
+        ]
+        NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
+    }
+    
+    deinit {
+        statusTimer?.invalidate()
     }
 }
