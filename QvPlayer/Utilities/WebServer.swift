@@ -71,75 +71,154 @@ class WebServer {
         
         guard parts.count >= 2 else { return }
         let method = parts[0]
-        let path = parts[1]
+        let fullPath = parts[1]
+        
+        // Parse URL components
+        guard let urlComponents = URLComponents(string: "http://localhost\(fullPath)") else { return }
+        let path = urlComponents.path
+        let queryItems = urlComponents.queryItems ?? []
+        
+        // Extract Body
+        var body = ""
+        if let range = requestString.range(of: "\r\n\r\n") {
+            body = String(requestString[range.upperBound...])
+        }
+        
+        print("Request: \(method) \(path)")
         
         if method == "GET" && path == "/" {
             sendResponse(connection: connection, body: htmlContent)
-        } else if method == "GET" && path == "/api/playlist" {
-            let videos = PlaylistManager.shared.getPlaylistVideos()
-            let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
-            if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
-               let jsonString = String(data: data, encoding: .utf8) {
-                sendResponse(connection: connection, contentType: "application/json", body: jsonString)
+        } else if method == "GET" && path == "/api/docs" {
+             sendResponse(connection: connection, body: apiDocsContent)
+        } 
+        // MARK: - API Endpoints
+        else if method == "GET" && (path == "/api/playlist" || path == "/api/videos") {
+            handleGetVideos(connection: connection)
+        } else if method == "POST" && path == "/api/videos" {
+            handleAddVideo(connection: connection, body: body)
+        } else if method == "DELETE" && path == "/api/videos" {
+            handleDeleteVideo(connection: connection, queryItems: queryItems)
+        } else if method == "PUT" && path == "/api/videos" {
+            handleUpdateVideo(connection: connection, queryItems: queryItems, body: body)
+        } else if method == "POST" && path == "/api/playlist" {
+            handleReplacePlaylist(connection: connection, body: body)
+        }
+        // MARK: - Legacy / Form Endpoints
+        else if method == "POST" && path == "/api/delete" {
+            // Legacy form support
+            let params = parseParams(body)
+            if let indexStr = params["index"], let index = Int(indexStr) {
+                PlaylistManager.shared.deleteVideo(at: index)
+                sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
             } else {
-                sendResponse(connection: connection, status: "500 Internal Server Error", body: "{}")
-            }
-        } else if method == "POST" && path == "/api/delete" {
-            if let range = requestString.range(of: "\r\n\r\n") {
-                let body = String(requestString[range.upperBound...])
-                let params = parseParams(body)
-                if let indexStr = params["index"], let index = Int(indexStr) {
-                    PlaylistManager.shared.deleteVideo(at: index)
-                    sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
-                } else {
-                    sendResponse(connection: connection, status: "400 Bad Request", body: "Missing index")
-                }
+                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing index")
             }
         } else if method == "POST" && path == "/api/edit" {
-            if let range = requestString.range(of: "\r\n\r\n") {
-                let body = String(requestString[range.upperBound...])
-                let params = parseParams(body)
-                if let indexStr = params["index"], let index = Int(indexStr),
-                   let title = params["title"], let url = params["url"] {
-                    let group = params["group"]
-                    PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-                    sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
-                } else {
-                    sendResponse(connection: connection, status: "400 Bad Request", body: "Missing parameters")
-                }
+            // Legacy form support
+            let params = parseParams(body)
+            if let indexStr = params["index"], let index = Int(indexStr),
+               let title = params["title"], let url = params["url"] {
+                let group = params["group"]
+                PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
+                sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+            } else {
+                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing parameters")
             }
         } else if method == "POST" && path == "/update" {
-            // Extract body
-            if let range = requestString.range(of: "\r\n\r\n") {
-                let body = String(requestString[range.upperBound...])
-                let decodedBody = body.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? body
-                
-                var m3uContent = decodedBody
-                if decodedBody.hasPrefix("playlist=") {
-                    m3uContent = String(decodedBody.dropFirst(9))
-                }
-                
-                PlaylistManager.shared.savePlaylist(content: m3uContent)
-                let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
-                sendResponse(connection: connection, body: successPage)
+            // Legacy form support
+            let decodedBody = body.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? body
+            var m3uContent = decodedBody
+            if decodedBody.hasPrefix("playlist=") {
+                m3uContent = String(decodedBody.dropFirst(9))
             }
+            PlaylistManager.shared.savePlaylist(content: m3uContent)
+            let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
+            sendResponse(connection: connection, body: successPage)
         } else if method == "POST" && path == "/add" {
-            if let range = requestString.range(of: "\r\n\r\n") {
-                let body = String(requestString[range.upperBound...])
-                let params = parseParams(body)
-                
-                if let title = params["title"], let url = params["url"] {
-                    let group = params["group"]
-                    PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-                    let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
-                    sendResponse(connection: connection, body: successPage)
-                } else {
-                    sendResponse(connection: connection, status: "400 Bad Request", body: "Missing title or url")
-                }
+            // Legacy form support
+            let params = parseParams(body)
+            if let title = params["title"], let url = params["url"] {
+                let group = params["group"]
+                PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
+                let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
+                sendResponse(connection: connection, body: successPage)
+            } else {
+                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing title or url")
             }
         } else {
             sendResponse(connection: connection, status: "404 Not Found", body: "Not Found")
         }
+    }
+    
+    // MARK: - API Handlers
+    
+    private func handleGetVideos(connection: NWConnection) {
+        let videos = PlaylistManager.shared.getPlaylistVideos()
+        let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
+        if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
+           let jsonString = String(data: data, encoding: .utf8) {
+            sendResponse(connection: connection, contentType: "application/json", body: jsonString)
+        } else {
+            sendResponse(connection: connection, status: "500 Internal Server Error", body: "{}")
+        }
+    }
+    
+    private func handleAddVideo(connection: NWConnection, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let title = json["title"],
+              let url = json["url"] else {
+            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            return
+        }
+        
+        let group = json["group"]
+        PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
+        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+    }
+    
+    private func handleDeleteVideo(connection: NWConnection, queryItems: [URLQueryItem]) {
+        guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
+              let index = Int(indexStr) else {
+            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
+            return
+        }
+        
+        PlaylistManager.shared.deleteVideo(at: index)
+        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+    }
+    
+    private func handleUpdateVideo(connection: NWConnection, queryItems: [URLQueryItem], body: String) {
+        guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
+              let index = Int(indexStr) else {
+            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
+            return
+        }
+        
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+              let title = json["title"],
+              let url = json["url"] else {
+            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            return
+        }
+        
+        let group = json["group"]
+        PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
+        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+    }
+    
+    private func handleReplacePlaylist(connection: NWConnection, body: String) {
+        // Check if body is JSON or raw M3U
+        if let data = body.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           let content = json["content"] {
+            PlaylistManager.shared.savePlaylist(content: content)
+        } else {
+            // Assume raw text
+            PlaylistManager.shared.savePlaylist(content: body)
+        }
+        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
     }
     
     private func parseParams(_ body: String) -> [String: String] {
@@ -340,6 +419,71 @@ class WebServer {
                 
                 loadPlaylist();
             </script>
+        </body>
+        </html>
+        """
+    }
+    
+    private var apiDocsContent: String {
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>QvPlayer API Documentation</title>
+            <style>
+                body { font-family: monospace; padding: 20px; max-width: 800px; margin: 0 auto; }
+                h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                .endpoint { background: #f4f4f4; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+                .method { font-weight: bold; color: #007AFF; }
+                .url { font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <h1>QvPlayer API</h1>
+            
+            <div class="endpoint">
+                <span class="method">GET</span> <span class="url">/api/videos</span>
+                <p>Get all videos in the playlist.</p>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">POST</span> <span class="url">/api/videos</span>
+                <p>Add a new video.</p>
+                <pre>
+        {
+          "title": "Channel Name",
+          "url": "http://...",
+          "group": "News"
+        }
+                </pre>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">DELETE</span> <span class="url">/api/videos?index={index}</span>
+                <p>Delete a video by index.</p>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">PUT</span> <span class="url">/api/videos?index={index}</span>
+                <p>Update a video by index.</p>
+                <pre>
+        {
+          "title": "New Name",
+          "url": "http://...",
+          "group": "New Group"
+        }
+                </pre>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">POST</span> <span class="url">/api/playlist</span>
+                <p>Replace the entire playlist.</p>
+                <pre>
+        {
+          "content": "#EXTM3U..."
+        }
+                </pre>
+            </div>
         </body>
         </html>
         """
