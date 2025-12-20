@@ -66,7 +66,17 @@ If you encounter a video with sound but no image (black screen), it is likely us
 2.  Change **Player Engine** from `System` to `KSPlayer`.
 3.  Resume playback.
 
-## 🛠 Tech Stack
+## � Screenshots
+
+| Home | Player |
+|:---:|:---:|
+| <img src="Screenshot/Simulator%20Screenshot3-home.png" width="400"/> | <img src="Screenshot/Simulator%20Screenshot1-player.png" width="400"/> |
+
+| Settings | Web Control |
+|:---:|:---:|
+| <img src="Screenshot/Simulator%20Screenshot-setting.png" width="400"/> | <img src="Screenshot/web_control.png" width="400"/> |
+
+## �🛠 Tech Stack
 
 *   **Language**: Swift
 *   **UI Framework**: SwiftUI

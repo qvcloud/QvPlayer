@@ -365,6 +365,12 @@ struct WebAssets {
                         </form>
                     </div>
                 </div>
+
+                <footer style="text-align: center; margin-top: 40px; padding-bottom: 20px; color: var(--secondary-text); font-size: 14px;">
+                    <p>&copy; <span id="year"></span> QvPlayer. All rights reserved.</p>
+                    <p>Open Source: <a href="https://github.com/qvcloud/QvPlayer" target="_blank" style="color: var(--primary-color); text-decoration: none;">https://github.com/qvcloud/QvPlayer</a></p>
+                    <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+                </footer>
             </div>
             
             <!-- Edit Modal -->
@@ -374,7 +380,7 @@ struct WebAssets {
                     <input type="hidden" id="editIndex">
                     <input type="text" id="editTitle" placeholder="Name">
                     <input type="text" id="editGroup" placeholder="Group">
-                    <input type="text" id="editUrl" placeholder="URL">
+                    <input type="text" id="editUrl" placeholder="URL" disabled>
                     <div class="modal-actions">
                         <button onclick="closeModal()" class="btn secondary">Cancel</button>
                         <button onclick="saveEdit()" class="btn">Save</button>

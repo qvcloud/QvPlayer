@@ -66,7 +66,17 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 2.  将 **播放引擎 (Player Engine)** 从 `System` 切换为 `KSPlayer`。
 3.  重新开始播放。
 
-## 🛠 技术栈
+## � 截图展示
+
+| 主页 | 播放器 |
+|:---:|:---:|
+| <img src="Screenshot/Simulator%20Screenshot3-home.png" width="400"/> | <img src="Screenshot/Simulator%20Screenshot1-player.png" width="400"/> |
+
+| 设置 | Web 控制台 |
+|:---:|:---:|
+| <img src="Screenshot/Simulator%20Screenshot-setting.png" width="400"/> | <img src="Screenshot/web_control.png" width="400"/> |
+
+## �🛠 技术栈
 
 *   **语言**: Swift
 *   **UI 框架**: SwiftUI
