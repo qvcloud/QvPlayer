@@ -21,6 +21,7 @@ class PlayerViewModel: ObservableObject {
     private var itemStatusObserver: NSKeyValueObservation?
     private var waitingReasonObserver: NSKeyValueObservation?
     private var statusTimer: Timer?
+    private var observers: [NSObjectProtocol] = []
     
     init() {
         // Setup audio session for playback
@@ -29,42 +30,52 @@ class PlayerViewModel: ObservableObject {
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
             print("❌ [AudioSession] Failed to setup: \(error)")
+            DebugLogger.shared.error("[AudioSession] Failed to setup: \(error)")
         }
         setupRemoteCommands()
     }
     
     private func setupRemoteCommands() {
-        NotificationCenter.default.addObserver(forName: .commandPlay, object: nil, queue: .main) { [weak self] _ in
-            self?.play()
-        }
+        let center = NotificationCenter.default
         
-        NotificationCenter.default.addObserver(forName: .commandPause, object: nil, queue: .main) { [weak self] _ in
-            self?.pause()
-        }
+        observers.append(center.addObserver(forName: .commandPlay, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, self.player != nil else { return }
+            self.play()
+        })
         
-        NotificationCenter.default.addObserver(forName: .commandToggle, object: nil, queue: .main) { [weak self] _ in
-            self?.togglePlayPause()
-        }
+        observers.append(center.addObserver(forName: .commandPause, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, self.player != nil else { return }
+            self.pause()
+        })
         
-        NotificationCenter.default.addObserver(forName: .commandSeek, object: nil, queue: .main) { [weak self] notification in
+        observers.append(center.addObserver(forName: .commandToggle, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self, self.player != nil else { return }
+            self.togglePlayPause()
+        })
+        
+        observers.append(center.addObserver(forName: .commandSeek, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self, self.player != nil else { return }
             if let seconds = notification.userInfo?["seconds"] as? Double {
-                self?.seek(by: seconds)
+                self.seek(by: seconds)
             }
-        }
+        })
     }
     
     func load(video: Video) {
         print("🎬 [Player] Loading video: \(video.title) - \(video.url)")
+        DebugLogger.shared.info("Loading video: \(video.title)")
         self.errorMessage = nil
         
         // Use cached URL if available
         let playURL = video.cachedURL ?? video.url
         print("📂 [Player] Playing from: \(playURL)")
+        DebugLogger.shared.info("Playing from: \(playURL.lastPathComponent)")
         
         let unsupportedExtensions = ["mkv", "avi", "flv", "wmv", "rmvb", "webm"]
         if playURL.pathExtension.lowercased() != "" && unsupportedExtensions.contains(playURL.pathExtension.lowercased()) {
             let msg = "⚠️ Format '.\(playURL.pathExtension)' is not supported by native player."
             print(msg)
+            DebugLogger.shared.warning(msg)
             self.errorMessage = msg
         }
         
@@ -94,6 +105,7 @@ class PlayerViewModel: ObservableObject {
         NotificationCenter.default.addObserver(forName: .AVPlayerItemNewErrorLogEntry, object: playerItem, queue: .main) { notification in
             if let item = notification.object as? AVPlayerItem, let log = item.errorLog()?.events.last {
                 print("❌ [Player Error] \(log.errorDomain): \(log.errorComment ?? "Unknown error")")
+                DebugLogger.shared.error("[Player Error] \(log.errorDomain): \(log.errorComment ?? "Unknown error")")
             }
         }
         
@@ -109,12 +121,18 @@ class PlayerViewModel: ObservableObject {
             switch item.status {
             case .readyToPlay:
                 print("✅ [Player Status] Ready to play")
+                DebugLogger.shared.info("Player Status: Ready to play")
             case .failed:
                 if let error = item.error {
                     print("❌ [Player Status] Failed: \(error.localizedDescription)")
+                    DebugLogger.shared.error("Player Status Failed: \(error.localizedDescription)")
+                    Task { @MainActor in
+                        self.errorMessage = "Playback Failed: \(error.localizedDescription)"
+                    }
                 }
             case .unknown:
                 print("❓ [Player Status] Unknown")
+                DebugLogger.shared.warning("Player Status: Unknown")
             @unknown default:
                 break
             }
@@ -133,11 +151,15 @@ class PlayerViewModel: ObservableObject {
                 
                 switch player.timeControlStatus {
                 case .waitingToPlayAtSpecifiedRate:
-                    print("⏳ [Player] Buffering... Reason: \(player.reasonForWaitingToPlay?.rawValue ?? "Unknown")")
+                    let reason = player.reasonForWaitingToPlay?.rawValue ?? "Unknown"
+                    print("⏳ [Player] Buffering... Reason: \(reason)")
+                    DebugLogger.shared.info("Buffering... Reason: \(reason)")
                 case .paused:
                     print("⏸ [Player] Paused")
+                    DebugLogger.shared.info("Player Paused")
                 case .playing:
                     print("▶️ [Player] Playing")
+                    DebugLogger.shared.info("Player Playing")
                 @unknown default:
                     break
                 }
@@ -211,5 +233,6 @@ class PlayerViewModel: ObservableObject {
     
     deinit {
         statusTimer?.invalidate()
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 }

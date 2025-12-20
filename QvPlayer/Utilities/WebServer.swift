@@ -68,19 +68,23 @@ class WebServer {
         }
         
         if bindResult == -1 {
-            print("Bind failed: \(String(cString: strerror(errno)))")
+            let errorMsg = "Bind failed: \(String(cString: strerror(errno)))"
+            print(errorMsg)
+            DebugLogger.shared.error(errorMsg)
             close(fd)
             return
         }
         
         if listen(fd, 5) == -1 {
             print("Listen failed")
+            DebugLogger.shared.error("Listen failed")
             close(fd)
             return
         }
         
         self.listeningFD = fd
         print("Server ready on port \(self.port)")
+        DebugLogger.shared.info("Server ready on port \(self.port)")
         
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         source.setEventHandler { [weak self] in
@@ -505,7 +509,9 @@ class WebServer {
             let fileURL = try CacheManager.shared.saveUploadedFile(data: fileData, filename: filename)
             
             // 4. Add to Playlist
-            PlaylistManager.shared.appendVideo(title: filename, url: fileURL.absoluteString, group: "Local Uploads")
+            // Use a custom scheme to persist local file references across app launches
+            let localURLString = "localcache://\(filename)"
+            PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: "Local Uploads")
             
             sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"path\": \"\(fileURL.lastPathComponent)\"}")
         } catch {

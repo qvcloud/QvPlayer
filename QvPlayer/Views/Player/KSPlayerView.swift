@@ -13,6 +13,7 @@ struct KSPlayerView: UIViewRepresentable {
     
     func makeUIView(context: Context) -> UIView {
         print("▶️ [KSPlayerView] Initializing KSPlayer")
+        DebugLogger.shared.info("[KSPlayerView] Initializing KSPlayer")
         let playerView = UIView()
         playerView.backgroundColor = .black
         

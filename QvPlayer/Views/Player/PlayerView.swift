@@ -8,6 +8,8 @@ struct PlayerView: View {
     @State private var ksIsPlaying = false
     
     @State private var showControls = false
+    @State private var tipsMessage: String?
+    @State private var showTips = false
     
     enum FocusField {
         case rewind, playPause, fastForward, ksPlayer
@@ -22,21 +24,30 @@ struct PlayerView: View {
                 systemPlayerContent
             }
             
-            // Debug Info Overlay
-            VStack {
-                HStack {
-                    Text("Engine: \(playerEngine == "ksplayer" ? "KSPlayer" : "System (AVPlayer)")")
-                        .font(.system(size: 24, weight: .bold)) // Larger font for TV
-                        .foregroundColor(.yellow)
-                        .padding(12)
-                        .background(Color.black.opacity(0.7))
-                        .cornerRadius(12)
+            // Tips / Error Overlay
+            if showTips, let message = tipsMessage {
+                VStack {
+                    HStack(spacing: 15) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.white)
+                            .font(.system(size: 30))
+                        Text(message)
+                            .font(.system(size: 24, weight: .medium))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.85))
+                            .shadow(radius: 10)
+                    )
+                    .padding(.top, 60)
                     Spacer()
                 }
-                Spacer()
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(100)
             }
-            .padding(60) // TV safe area
-            .allowsHitTesting(false)
         }
         .onAppear {
             print("▶️ [PlayerView] Current Engine: \(playerEngine)")
@@ -49,6 +60,16 @@ struct PlayerView: View {
         .onChange(of: showControls) { _, newValue in
             if newValue {
                 // Auto-hide logic could go here if we didn't force focus
+            }
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            if let error = newValue {
+                showTips(message: error)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("playerDidEncounterError"))) { notification in
+            if let message = notification.userInfo?["message"] as? String {
+                showTips(message: message)
             }
         }
     }
@@ -72,7 +93,7 @@ struct PlayerView: View {
                 playerControls(
                     isPlaying: ksIsPlaying,
                     onPlayPause: { NotificationCenter.default.post(name: .commandToggle, object: nil) },
-                    onSeek: { sec in NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": sec]) }
+                    onSeek: { NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": $0]) }
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: .playerStatusDidUpdate)) { notification in
@@ -100,19 +121,6 @@ struct PlayerView: View {
                                     .tint(.white)
                             }
                         }
-                        
-                        if let error = viewModel.errorMessage {
-                            VStack {
-                                Text(error)
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .background(Color.red.opacity(0.8))
-                                    .cornerRadius(8)
-                                Spacer()
-                            }
-                            .padding(.top, 50)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                        }
                     }
                     .onTapGesture {
                         toggleControls(engine: "system")
@@ -133,6 +141,7 @@ struct PlayerView: View {
         }
         .onDisappear {
             viewModel.pause()
+            viewModel.player = nil
         }
     }
     
@@ -199,6 +208,20 @@ struct PlayerView: View {
                 focusedField = .ksPlayer
             } else {
                 focusedField = nil
+            }
+        }
+    }
+    
+    func showTips(message: String) {
+        self.tipsMessage = message
+        withAnimation {
+            self.showTips = true
+        }
+        
+        // Auto-hide after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            withAnimation {
+                self.showTips = false
             }
         }
     }

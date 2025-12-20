@@ -85,15 +85,14 @@ struct SettingsView: View {
                     HStack {
                         Text("Address")
                         Spacer()
-        .alert("Restart Required", isPresented: $showRestartAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("Please restart the app to apply language changes.")
-        }
                         Text(url)
                             .foregroundColor(.secondary)
                     }
                 }
+            }
+            
+            Section(header: Text("Debug")) {
+                Toggle("Show Debug Overlay", isOn: DebugLogger.shared.$showDebugOverlay)
             }
             
             Section(header: Text("About")) {
@@ -110,5 +109,10 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .alert("Restart Required", isPresented: $showRestartAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please restart the app to apply language changes.")
+        }
     }
 }

@@ -13,20 +13,26 @@ class PlaylistManager: ObservableObject {
     func savePlaylist(content: String) {
         do {
             try content.write(to: fileURL, atomically: true, encoding: .utf8)
+            DebugLogger.shared.info("Playlist saved successfully")
             // Post notification or update observable to reload
             NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
         } catch {
-            print("Error saving playlist: \(error)")
+            DebugLogger.shared.error("Error saving playlist: \(error)")
         }
     }
     
     func loadPlaylist() -> String? {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            DebugLogger.shared.info("No existing playlist found")
+            return nil
+        }
         
         do {
-            return try String(contentsOf: fileURL, encoding: .utf8)
+            let content = try String(contentsOf: fileURL, encoding: .utf8)
+            DebugLogger.shared.info("Playlist loaded successfully")
+            return content
         } catch {
-            print("Error loading playlist: \(error)")
+            DebugLogger.shared.error("Error loading playlist: \(error)")
             return nil
         }
     }
@@ -39,7 +45,11 @@ class PlaylistManager: ObservableObject {
     }
     
     func appendVideo(title: String, url: String, group: String? = nil) {
-        guard let validURL = URL(string: url) else { return }
+        DebugLogger.shared.info("Appending video: \(title)")
+        guard let validURL = URL(string: url) else {
+            DebugLogger.shared.error("Invalid URL for video: \(url)")
+            return
+        }
         var videos = getPlaylistVideos()
         let isLive = !validURL.isFileURL
         let newVideo = Video(title: title, url: validURL, group: group, isLive: isLive)
@@ -51,7 +61,12 @@ class PlaylistManager: ObservableObject {
     
     func deleteVideo(at index: Int) {
         var videos = getPlaylistVideos()
-        guard index >= 0 && index < videos.count else { return }
+        guard index >= 0 && index < videos.count else {
+            DebugLogger.shared.error("Invalid index for deletion: \(index)")
+            return
+        }
+        let video = videos[index]
+        DebugLogger.shared.info("Deleting video: \(video.title)")
         videos.remove(at: index)
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         savePlaylist(content: newContent)
@@ -59,14 +74,17 @@ class PlaylistManager: ObservableObject {
     
     func updateVideo(at index: Int, title: String, url: String, group: String? = nil) {
         var videos = getPlaylistVideos()
-        guard index >= 0 && index < videos.count else { return }
-        guard let validURL = URL(string: url) else { return }
+        guard index >= 0 && index < videos.count else {
+            DebugLogger.shared.error("Invalid index for update: \(index)")
+            return
+        }
+        guard let validURL = URL(string: url) else {
+            DebugLogger.shared.error("Invalid URL for update: \(url)")
+            return
+        }
         
+        DebugLogger.shared.info("Updating video at index \(index): \(title)")
         var video = videos[index]
-        video.title = title
-        video.url = validURL
-        video.group = group
-        videos[index] = video
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         savePlaylist(content: newContent)

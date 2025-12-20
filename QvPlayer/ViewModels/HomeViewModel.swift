@@ -26,17 +26,20 @@ class HomeViewModel: ObservableObject {
     }
     
     func loadVideos() async {
+        DebugLogger.shared.info("Loading videos...")
         isLoading = true
         defer { isLoading = false }
         
         // Try to load from local storage first
         let localVideos = PlaylistManager.shared.getPlaylistVideos()
         if !localVideos.isEmpty {
+            DebugLogger.shared.info("Loaded \(localVideos.count) videos from local storage")
             self.videos = localVideos
             self.groupVideos(localVideos)
             return
         }
         
+        DebugLogger.shared.warning("No local playlist found, using sample videos")
         // Fallback to sample videos if no local playlist
         self.videos = [
             Video(title: "CGTN Live", url: URL(string: "https://0472.org/hls/cgtn.m3u8")!, group: "News", isLive: true, description: "CGTN Live Stream"),
@@ -46,6 +49,7 @@ class HomeViewModel: ObservableObject {
     }
     
     private func groupVideos(_ videos: [Video]) {
+        DebugLogger.shared.info("Grouping \(videos.count) videos")
         let groupedDictionary = Dictionary(grouping: videos) { $0.group ?? "Ungrouped" }
         
         let sortedKeys = groupedDictionary.keys.sorted {

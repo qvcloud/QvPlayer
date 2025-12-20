@@ -9,7 +9,12 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        HomeView()
+        ZStack {
+            HomeView()
+            
+            DebugOverlayView()
+                .zIndex(999)
+        }
     }
 }
 

@@ -18,6 +18,7 @@ class PlaylistService {
     private init() {}
     
     func parseM3U(content: String) -> [Video] {
+        DebugLogger.shared.info("Parsing M3U content...")
         var videos: [Video] = []
         let lines = content.components(separatedBy: .newlines)
         
@@ -50,25 +51,48 @@ class PlaylistService {
                     currentTitle = components.last?.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
             } else if !trimmedLine.hasPrefix("#") {
+                // Handle custom localcache scheme
+                var finalURL: URL?
+                if trimmedLine.hasPrefix("localcache://") {
+                    let filename = String(trimmedLine.dropFirst("localcache://".count))
+                    finalURL = CacheManager.shared.getFileURL(filename: filename)
+                } else {
+                    finalURL = URL(string: trimmedLine)
+                }
+                
                 // Assume it's a URL (http, https, or file)
-                if let url = URL(string: trimmedLine) {
+                if let url = finalURL {
+                    var validURL = url
                     let title = currentTitle ?? "Unknown Channel"
                     // Check cache only for remote URLs
                     var cachedURL: URL? = nil
                     var isLive = true
                     
-                    if url.isFileURL {
-                        cachedURL = url
+                    if validURL.isFileURL {
+                        // Self-healing: If file doesn't exist, check if it's in the current cache
+                        if !FileManager.default.fileExists(atPath: validURL.path) {
+                            let filename = validURL.lastPathComponent
+                            let potentialNewURL = CacheManager.shared.getFileURL(filename: filename)
+                            if FileManager.default.fileExists(atPath: potentialNewURL.path) {
+                                DebugLogger.shared.warning("Recovered broken file path for: \(filename)")
+                                validURL = potentialNewURL
+                            } else {
+                                DebugLogger.shared.error("File not found for: \(filename)")
+                            }
+                        }
+                        
+                        cachedURL = validURL
                         isLive = false
-                    } else if url.scheme?.lowercased().hasPrefix("http") == true {
-                         cachedURL = CacheManager.shared.isCached(remoteURL: url) ? CacheManager.shared.getCachedFileURL(for: url) : nil
+                    } else if validURL.scheme?.lowercased().hasPrefix("http") == true {
+                         cachedURL = CacheManager.shared.isCached(remoteURL: validURL) ? CacheManager.shared.getCachedFileURL(for: validURL) : nil
                     }
                     
-                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: isLive, cachedURL: cachedURL))
+                    videos.append(Video(title: title, url: validURL, group: currentGroup, isLive: isLive, cachedURL: cachedURL))
                     currentTitle = nil
                     currentGroup = nil
                 }
             }
+        DebugLogger.shared.info("Parsed \(videos.count) videos from M3U")
         }
         
         return videos
@@ -84,7 +108,18 @@ class PlaylistService {
             extInf += ",\(video.title)"
             
             content += "\(extInf)\n"
-            content += "\(video.url.absoluteString)\n"
+            
+            var urlString = video.url.absoluteString
+            if video.url.isFileURL {
+                let filename = video.url.lastPathComponent
+                let expectedCacheURL = CacheManager.shared.getFileURL(filename: filename)
+                // Compare paths to handle potential scheme differences (file://)
+                if video.url.path == expectedCacheURL.path {
+                    urlString = "localcache://\(filename)"
+                }
+            }
+            
+            content += "\(urlString)\n"
         }
         return content
     }
