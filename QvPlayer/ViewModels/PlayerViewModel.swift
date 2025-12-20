@@ -9,21 +9,62 @@ class PlayerViewModel: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var isBuffering: Bool = false
     @Published var currentVideo: Video?
+    @Published var errorMessage: String?
     
     private var cancellables = Set<AnyCancellable>()
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var rateObserver: NSKeyValueObservation?
     private var itemStatusObserver: NSKeyValueObservation?
+    private var waitingReasonObserver: NSKeyValueObservation?
     
     init() {
-        // Setup audio session for playback if needed (more relevant for iOS but good practice)
-        // For tvOS, AVPlayer handles most things automatically.
+        // Setup audio session for playback
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            print("❌ [AudioSession] Failed to setup: \(error)")
+        }
+        setupRemoteCommands()
+    }
+    
+    private func setupRemoteCommands() {
+        NotificationCenter.default.addObserver(forName: .commandPlay, object: nil, queue: .main) { [weak self] _ in
+            self?.play()
+        }
+        
+        NotificationCenter.default.addObserver(forName: .commandPause, object: nil, queue: .main) { [weak self] _ in
+            self?.pause()
+        }
+        
+        NotificationCenter.default.addObserver(forName: .commandToggle, object: nil, queue: .main) { [weak self] _ in
+            self?.togglePlayPause()
+        }
+        
+        NotificationCenter.default.addObserver(forName: .commandSeek, object: nil, queue: .main) { [weak self] notification in
+            if let seconds = notification.userInfo?["seconds"] as? Double {
+                self?.seek(by: seconds)
+            }
+        }
     }
     
     func load(video: Video) {
         print("🎬 [Player] Loading video: \(video.title) - \(video.url)")
+        self.errorMessage = nil
+        
+        // Use cached URL if available
+        let playURL = video.cachedURL ?? video.url
+        print("📂 [Player] Playing from: \(playURL)")
+        
+        let unsupportedExtensions = ["mkv", "avi", "flv", "wmv", "rmvb", "webm"]
+        if playURL.pathExtension.lowercased() != "" && unsupportedExtensions.contains(playURL.pathExtension.lowercased()) {
+            let msg = "⚠️ Format '.\(playURL.pathExtension)' is not supported by native player."
+            print(msg)
+            self.errorMessage = msg
+        }
+        
         self.currentVideo = video
-        let playerItem = AVPlayerItem(url: video.url)
+        let playerItem = AVPlayerItem(url: playURL)
         
         // Set external metadata for tvOS Info Panel
         var metadata: [AVMetadataItem] = []
@@ -84,12 +125,31 @@ class PlayerViewModel: ObservableObject {
         timeControlStatusObserver = player?.observe(\.timeControlStatus) { [weak self] player, _ in
             Task { @MainActor in
                 self?.isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                
+                switch player.timeControlStatus {
+                case .waitingToPlayAtSpecifiedRate:
+                    print("⏳ [Player] Buffering... Reason: \(player.reasonForWaitingToPlay?.rawValue ?? "Unknown")")
+                case .paused:
+                    print("⏸ [Player] Paused")
+                case .playing:
+                    print("▶️ [Player] Playing")
+                @unknown default:
+                    break
+                }
+            }
+        }
+        
+        // Observe waiting reason
+        waitingReasonObserver = player?.observe(\.reasonForWaitingToPlay) { player, _ in
+            if let reason = player.reasonForWaitingToPlay {
+                print("🤔 [Player] Waiting reason changed: \(reason.rawValue)")
             }
         }
         
         // Observe playback rate to sync isPlaying state
         rateObserver = player?.observe(\.rate) { [weak self] player, _ in
             Task { @MainActor in
+                print("📉 [Player] Rate changed to: \(player.rate)")
                 self?.isPlaying = player.rate != 0
             }
         }

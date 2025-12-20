@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3FA14B322EF693B4001426DD /* FFmpegKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA14B312EF693B4001426DD /* FFmpegKit */; };
+		3FA14B342EF693B4001426DD /* Libavcodec in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA14B332EF693B4001426DD /* Libavcodec */; };
+		3FA14B362EF693B4001426DD /* Libavfilter in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA14B352EF693B4001426DD /* Libavfilter */; };
+		3FA14B382EF693B4001426DD /* Libavformat in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA14B372EF693B4001426DD /* Libavformat */; };
+		3FA14B3A2EF693B4001426DD /* Libavutil in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA14B392EF693B4001426DD /* Libavutil */; };
+		3FA4DFD12EF6954B00F03E9C /* KSPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 3FA4DFD02EF6954B00F03E9C /* KSPlayer */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3FA149E22EF63FB7001426DD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +61,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3FA14B3A2EF693B4001426DD /* Libavutil in Frameworks */,
+				3FA4DFD12EF6954B00F03E9C /* KSPlayer in Frameworks */,
+				3FA14B342EF693B4001426DD /* Libavcodec in Frameworks */,
+				3FA14B322EF693B4001426DD /* FFmpegKit in Frameworks */,
+				3FA14B382EF693B4001426DD /* Libavformat in Frameworks */,
+				3FA14B362EF693B4001426DD /* Libavfilter in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,12 +121,28 @@
 			buildRules = (
 			);
 			dependencies = (
+				3FA4DFE12EF695EB00F03E9C /* PBXTargetDependency */,
+				3FA4DFE32EF695EB00F03E9C /* PBXTargetDependency */,
+				3FA4DFD52EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFD72EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFD92EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFDB2EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFDD2EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFDF2EF695E400F03E9C /* PBXTargetDependency */,
+				3FA4DFD32EF695BC00F03E9C /* PBXTargetDependency */,
+				3FA4DFB82EF694EC00F03E9C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				3FA149D62EF63FB5001426DD /* QvPlayer */,
 			);
 			name = QvPlayer;
 			packageProductDependencies = (
+				3FA14B312EF693B4001426DD /* FFmpegKit */,
+				3FA14B332EF693B4001426DD /* Libavcodec */,
+				3FA14B352EF693B4001426DD /* Libavfilter */,
+				3FA14B372EF693B4001426DD /* Libavformat */,
+				3FA14B392EF693B4001426DD /* Libavutil */,
+				3FA4DFD02EF6954B00F03E9C /* KSPlayer */,
 			);
 			productName = QvPlayer;
 			productReference = 3FA149D42EF63FB5001426DD /* QvPlayer.app */;
@@ -196,6 +227,10 @@
 			);
 			mainGroup = 3FA149CB2EF63FB5001426DD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */,
+				3FA4DFCF2EF6953800F03E9C /* XCRemoteSwiftPackageReference "KSPlayer" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3FA149D52EF63FB5001426DD /* Products */;
 			projectDirPath = "";
@@ -266,6 +301,46 @@
 			isa = PBXTargetDependency;
 			target = 3FA149D32EF63FB5001426DD /* QvPlayer */;
 			targetProxy = 3FA149EC2EF63FB7001426DD /* PBXContainerItemProxy */;
+		};
+		3FA4DFB82EF694EC00F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFB72EF694EC00F03E9C /* FFmpegKit */;
+		};
+		3FA4DFD32EF695BC00F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFD22EF695BC00F03E9C /* KSPlayer */;
+		};
+		3FA4DFD52EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFD42EF695E400F03E9C /* Libavcodec */;
+		};
+		3FA4DFD72EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFD62EF695E400F03E9C /* Libavfilter */;
+		};
+		3FA4DFD92EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFD82EF695E400F03E9C /* Libavformat */;
+		};
+		3FA4DFDB2EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFDA2EF695E400F03E9C /* Libavutil */;
+		};
+		3FA4DFDD2EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFDC2EF695E400F03E9C /* Libswresample */;
+		};
+		3FA4DFDF2EF695E400F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFDE2EF695E400F03E9C /* Libswscale */;
+		};
+		3FA4DFE12EF695EB00F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFE02EF695EB00F03E9C /* libass */;
+		};
+		3FA4DFE32EF695EB00F03E9C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			productRef = 3FA4DFE22EF695EB00F03E9C /* libmpv */;
 		};
 /* End PBXTargetDependency section */
 
@@ -543,6 +618,108 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/FFmpegKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.1.3;
+			};
+		};
+		3FA4DFCF2EF6953800F03E9C /* XCRemoteSwiftPackageReference "KSPlayer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/KSPlayer";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.3.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3FA14B312EF693B4001426DD /* FFmpegKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = FFmpegKit;
+		};
+		3FA14B332EF693B4001426DD /* Libavcodec */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavcodec;
+		};
+		3FA14B352EF693B4001426DD /* Libavfilter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavfilter;
+		};
+		3FA14B372EF693B4001426DD /* Libavformat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavformat;
+		};
+		3FA14B392EF693B4001426DD /* Libavutil */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavutil;
+		};
+		3FA4DFB72EF694EC00F03E9C /* FFmpegKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = FFmpegKit;
+		};
+		3FA4DFD02EF6954B00F03E9C /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA4DFCF2EF6953800F03E9C /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+		3FA4DFD22EF695BC00F03E9C /* KSPlayer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA4DFCF2EF6953800F03E9C /* XCRemoteSwiftPackageReference "KSPlayer" */;
+			productName = KSPlayer;
+		};
+		3FA4DFD42EF695E400F03E9C /* Libavcodec */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavcodec;
+		};
+		3FA4DFD62EF695E400F03E9C /* Libavfilter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavfilter;
+		};
+		3FA4DFD82EF695E400F03E9C /* Libavformat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavformat;
+		};
+		3FA4DFDA2EF695E400F03E9C /* Libavutil */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libavutil;
+		};
+		3FA4DFDC2EF695E400F03E9C /* Libswresample */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libswresample;
+		};
+		3FA4DFDE2EF695E400F03E9C /* Libswscale */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = Libswscale;
+		};
+		3FA4DFE02EF695EB00F03E9C /* libass */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = libass;
+		};
+		3FA4DFE22EF695EB00F03E9C /* libmpv */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3FA14B302EF6937C001426DD /* XCRemoteSwiftPackageReference "FFmpegKit" */;
+			productName = libmpv;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3FA149CC2EF63FB5001426DD /* Project object */;
 }

@@ -1,10 +1,28 @@
 import Foundation
-import Network
+import Darwin
 
 class WebServer {
     static let shared = WebServer()
-    private var listener: NWListener?
-    private let port: NWEndpoint.Port = 8080
+    private let port: UInt16 = 10001
+    
+    private class Client {
+        let id = UUID()
+        let fd: Int32
+        var source: DispatchSourceRead?
+        var buffer = Data()
+        var expectedContentLength: Int = 0
+        var headersReceived = false
+        var headerEndIndex: Int = 0
+        
+        init(fd: Int32) {
+            self.fd = fd
+        }
+    }
+    
+    private var clients: [UUID: Client] = [:]
+    private let queue = DispatchQueue(label: "com.qvplayer.webserver")
+    private var listeningFD: Int32 = -1
+    private var listeningSource: DispatchSourceRead?
     
     var serverURL: String? {
         if let ip = getIPAddress() {
@@ -14,58 +32,171 @@ class WebServer {
     }
     
     func start() {
-        do {
-            listener = try NWListener(using: .tcp, on: port)
-            listener?.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    print("Server ready on port \(self.port)")
-                case .failed(let error):
-                    print("Server failed with error: \(error)")
-                default:
-                    break
-                }
-            }
-            
-            listener?.newConnectionHandler = { newConnection in
-                self.handleConnection(newConnection)
-            }
-            
-            listener?.start(queue: .global())
-        } catch {
-            print("Failed to create listener: \(error)")
-        }
-    }
-    
-    func stop() {
-        listener?.cancel()
-        listener = nil
-    }
-    
-    private func handleConnection(_ connection: NWConnection) {
-        connection.start(queue: .global())
-        receive(on: connection)
-    }
-    
-    private func receive(on connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] (data, context, isComplete, error) in
-            if let data = data, !data.isEmpty {
-                self?.processRequest(data: data, connection: connection)
-            }
-            if error != nil {
-                connection.cancel()
-            }
-        }
-    }
-    
-    private func processRequest(data: Data, connection: NWConnection) {
-        guard let requestString = String(data: data, encoding: .utf8) else {
-            connection.cancel()
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd != -1 else {
+            print("Failed to create socket")
             return
         }
         
-        // Simple parsing
-        let lines = requestString.components(separatedBy: "\r\n")
+        var value: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &value, socklen_t(MemoryLayout<Int32>.size))
+        
+        // Set non-blocking
+        let flags = fcntl(fd, F_GETFL)
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+        
+        var addr = sockaddr_in()
+        addr.sin_len = __uint8_t(MemoryLayout<sockaddr_in>.size)
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_port = in_port_t(self.port).bigEndian
+        addr.sin_addr.s_addr = in_addr_t(0) // INADDR_ANY
+        
+        let bindResult = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        
+        if bindResult == -1 {
+            print("Bind failed: \(String(cString: strerror(errno)))")
+            close(fd)
+            return
+        }
+        
+        if listen(fd, 5) == -1 {
+            print("Listen failed")
+            close(fd)
+            return
+        }
+        
+        self.listeningFD = fd
+        print("Server ready on port \(self.port)")
+        
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.acceptConnection()
+        }
+        source.resume()
+        self.listeningSource = source
+    }
+    
+    func stop() {
+        listeningSource?.cancel()
+        listeningSource = nil
+        if listeningFD != -1 {
+            close(listeningFD)
+            listeningFD = -1
+        }
+        // Close all client connections
+        for client in clients.values {
+            client.source?.cancel()
+            close(client.fd)
+        }
+        clients.removeAll()
+    }
+    
+    private func acceptConnection() {
+        var addr = sockaddr_in()
+        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let clientFD = withUnsafeMutablePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                accept(listeningFD, $0, &len)
+            }
+        }
+        
+        guard clientFD != -1 else { return }
+        
+        // Set non-blocking for client
+        let flags = fcntl(clientFD, F_GETFL)
+        fcntl(clientFD, F_SETFL, flags | O_NONBLOCK)
+        
+        let client = Client(fd: clientFD)
+        self.clients[client.id] = client
+        
+        let source = DispatchSource.makeReadSource(fileDescriptor: clientFD, queue: queue)
+        source.setEventHandler { [weak self] in
+            self?.readData(from: client)
+        }
+        source.setCancelHandler {
+            close(clientFD)
+        }
+        source.resume()
+        client.source = source
+    }
+    
+    private func readData(from client: Client) {
+        var buffer = [UInt8](repeating: 0, count: 65536)
+        let bytesRead = read(client.fd, &buffer, buffer.count)
+        
+        if bytesRead > 0 {
+            let data = Data(bytes: buffer, count: bytesRead)
+            client.buffer.append(data)
+            self.checkRequest(client: client)
+        } else if bytesRead == 0 {
+            // EOF
+            closeClient(client)
+        } else {
+            if errno != EAGAIN && errno != EWOULDBLOCK {
+                print("Read error: \(String(cString: strerror(errno)))")
+                closeClient(client)
+            }
+        }
+    }
+    
+    private func closeClient(_ client: Client) {
+        client.source?.cancel()
+        client.source = nil
+        // fd is closed in cancel handler
+        self.clients.removeValue(forKey: client.id)
+    }
+    
+    private func checkRequest(client: Client) {
+        if !client.headersReceived {
+            if let range = client.buffer.range(of: "\r\n\r\n".data(using: .utf8)!) {
+                let headersData = client.buffer.subdata(in: 0..<range.lowerBound)
+                let headersString = String(data: headersData, encoding: .utf8) ?? ""
+                
+                let lines = headersString.components(separatedBy: "\r\n")
+                var contentLengthFound = false
+                for line in lines {
+                    if line.lowercased().hasPrefix("content-length:") {
+                        let value = line.dropFirst("content-length:".count).trimmingCharacters(in: .whitespaces)
+                        client.expectedContentLength = Int(value) ?? 0
+                        print("✅ [WebServer] Parsed Content-Length: \(client.expectedContentLength) from line: '\(line)'")
+                        contentLengthFound = true
+                        break
+                    }
+                }
+                
+                if !contentLengthFound {
+                    client.expectedContentLength = 0
+                    print("⚠️ [WebServer] Content-Length not found in headers")
+                    // print("Headers: \(headersString)") // Uncomment for debugging
+                }
+                
+                client.headersReceived = true
+                client.headerEndIndex = range.upperBound
+            }
+        }
+        
+        if client.headersReceived {
+            let totalExpected = client.headerEndIndex + client.expectedContentLength
+            if client.buffer.count >= totalExpected {
+                self.processRequest(data: client.buffer, client: client)
+            }
+        }
+    }
+    
+    private func processRequest(data: Data, client: Client) {
+        guard let range = data.range(of: "\r\n\r\n".data(using: .utf8)!) else {
+            closeClient(client)
+            return
+        }
+        
+        let headersData = data.subdata(in: 0..<range.lowerBound)
+        guard let headersString = String(data: headersData, encoding: .utf8) else { return }
+        
+        let lines = headersString.components(separatedBy: "\r\n")
         guard let requestLine = lines.first else { return }
         let parts = requestLine.components(separatedBy: " ")
         
@@ -73,125 +204,130 @@ class WebServer {
         let method = parts[0]
         let fullPath = parts[1]
         
-        // Parse URL components
         guard let urlComponents = URLComponents(string: "http://localhost\(fullPath)") else { return }
         let path = urlComponents.path
         let queryItems = urlComponents.queryItems ?? []
         
-        // Extract Body
-        var body = ""
-        if let range = requestString.range(of: "\r\n\r\n") {
-            body = String(requestString[range.upperBound...])
-        }
+        let bodyData = data.subdata(in: range.upperBound..<data.count)
+        // Only convert to string if needed, and be careful with binary data
+        let bodyString = String(data: bodyData, encoding: .utf8) ?? ""
         
         print("Request: \(method) \(path)")
         
         if method == "GET" && path == "/" {
-            sendResponse(connection: connection, body: htmlContent)
+            sendResponse(client: client, body: htmlContent)
         } else if method == "GET" && path == "/api/docs" {
-             sendResponse(connection: connection, body: apiDocsContent)
+             sendResponse(client: client, body: apiDocsContent)
         } 
         // MARK: - API Endpoints
         else if method == "GET" && (path == "/api/playlist" || path == "/api/videos") {
-            handleGetVideos(connection: connection)
+            handleGetVideos(client: client)
         } else if method == "POST" && path == "/api/videos" {
-            handleAddVideo(connection: connection, body: body)
+            handleAddVideo(client: client, body: bodyString)
         } else if method == "DELETE" && path == "/api/videos" {
-            handleDeleteVideo(connection: connection, queryItems: queryItems)
+            handleDeleteVideo(client: client, queryItems: queryItems)
         } else if method == "PUT" && path == "/api/videos" {
-            handleUpdateVideo(connection: connection, queryItems: queryItems, body: body)
+            handleUpdateVideo(client: client, queryItems: queryItems, body: bodyString)
         } else if method == "POST" && path == "/api/playlist" {
-            handleReplacePlaylist(connection: connection, body: body)
+            handleReplacePlaylist(client: client, body: bodyString)
+        }
+        // MARK: - Control Endpoints
+        else if method == "POST" && path.hasPrefix("/api/control/") {
+            handleControl(client: client, path: path, queryItems: queryItems)
+        }
+        // MARK: - Upload Endpoint
+        else if method == "POST" && path == "/api/upload" {
+            handleUpload(client: client, headers: headersString, body: bodyData)
         }
         // MARK: - Legacy / Form Endpoints
         else if method == "POST" && path == "/api/delete" {
             // Legacy form support
-            let params = parseParams(body)
+            let params = parseParams(bodyString)
             if let indexStr = params["index"], let index = Int(indexStr) {
                 PlaylistManager.shared.deleteVideo(at: index)
-                sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+                sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
             } else {
-                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing index")
+                sendResponse(client: client, status: "400 Bad Request", body: "Missing index")
             }
         } else if method == "POST" && path == "/api/edit" {
             // Legacy form support
-            let params = parseParams(body)
+            let params = parseParams(bodyString)
             if let indexStr = params["index"], let index = Int(indexStr),
                let title = params["title"], let url = params["url"] {
                 let group = params["group"]
                 PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-                sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+                sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
             } else {
-                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing parameters")
+                sendResponse(client: client, status: "400 Bad Request", body: "Missing parameters")
             }
         } else if method == "POST" && path == "/update" {
             // Legacy form support
-            let decodedBody = body.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? body
+            let decodedBody = bodyString.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? bodyString
             var m3uContent = decodedBody
             if decodedBody.hasPrefix("playlist=") {
                 m3uContent = String(decodedBody.dropFirst(9))
             }
             PlaylistManager.shared.savePlaylist(content: m3uContent)
             let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
-            sendResponse(connection: connection, body: successPage)
+            sendResponse(client: client, body: successPage)
         } else if method == "POST" && path == "/add" {
             // Legacy form support
-            let params = parseParams(body)
+            let params = parseParams(bodyString)
             if let title = params["title"], let url = params["url"] {
                 let group = params["group"]
                 PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
                 let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
-                sendResponse(connection: connection, body: successPage)
+                sendResponse(client: client, body: successPage)
             } else {
-                sendResponse(connection: connection, status: "400 Bad Request", body: "Missing title or url")
+                sendResponse(client: client, status: "400 Bad Request", body: "Missing title or url")
             }
         } else {
-            sendResponse(connection: connection, status: "404 Not Found", body: "Not Found")
+            sendResponse(client: client, status: "404 Not Found", body: "Not Found")
         }
     }
     
     // MARK: - API Handlers
     
-    private func handleGetVideos(connection: NWConnection) {
+    private func handleGetVideos(client: Client) {
         let videos = PlaylistManager.shared.getPlaylistVideos()
         let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
         if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
            let jsonString = String(data: data, encoding: .utf8) {
-            sendResponse(connection: connection, contentType: "application/json", body: jsonString)
+            sendResponse(client: client, contentType: "application/json", body: jsonString)
         } else {
-            sendResponse(connection: connection, status: "500 Internal Server Error", body: "{}")
+            sendResponse(client: client, status: "500 Internal Server Error", body: "{}")
         }
     }
     
-    private func handleAddVideo(connection: NWConnection, body: String) {
+    private func handleAddVideo(client: Client, body: String) {
         guard let data = body.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
               let title = json["title"],
               let url = json["url"] else {
-            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
             return
         }
         
         let group = json["group"]
         PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
     }
     
-    private func handleDeleteVideo(connection: NWConnection, queryItems: [URLQueryItem]) {
+    private func handleDeleteVideo(client: Client, queryItems: [URLQueryItem]) {
         guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
               let index = Int(indexStr) else {
-            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
             return
         }
         
         PlaylistManager.shared.deleteVideo(at: index)
-        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
     }
     
-    private func handleUpdateVideo(connection: NWConnection, queryItems: [URLQueryItem], body: String) {
+    private func handleUpdateVideo(client: Client, queryItems: [URLQueryItem], body: String) {
         guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
               let index = Int(indexStr) else {
-            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
             return
         }
         
@@ -199,16 +335,16 @@ class WebServer {
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
               let title = json["title"],
               let url = json["url"] else {
-            sendResponse(connection: connection, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
             return
         }
         
         let group = json["group"]
         PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
     }
     
-    private func handleReplacePlaylist(connection: NWConnection, body: String) {
+    private func handleReplacePlaylist(client: Client, body: String) {
         // Check if body is JSON or raw M3U
         if let data = body.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
@@ -218,7 +354,140 @@ class WebServer {
             // Assume raw text
             PlaylistManager.shared.savePlaylist(content: body)
         }
-        sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+    }
+    
+    private func handleControl(client: Client, path: String, queryItems: [URLQueryItem]) {
+        let action = path.replacingOccurrences(of: "/api/control/", with: "")
+        
+        switch action {
+        case "play":
+            NotificationCenter.default.post(name: .commandPlay, object: nil)
+        case "pause":
+            NotificationCenter.default.post(name: .commandPause, object: nil)
+        case "toggle":
+            NotificationCenter.default.post(name: .commandToggle, object: nil)
+        case "seek":
+            if let secondsStr = queryItems.first(where: { $0.name == "time" })?.value,
+               let seconds = Double(secondsStr) {
+                NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": seconds])
+            }
+        case "play_video":
+            if let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
+               let index = Int(indexStr) {
+                NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["index": index])
+            }
+        default:
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Unknown action\"}")
+            return
+        }
+        
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+    }
+    
+    private func handleUpload(client: Client, headers: String, body: Data) {
+        print("📂 [Upload] Starting upload handling. Body size: \(body.count)")
+        
+        // 1. Extract Boundary
+        var boundary: String?
+        let lines = headers.components(separatedBy: "\r\n")
+        for line in lines {
+            if line.lowercased().hasPrefix("content-type:") {
+                let parts = line.components(separatedBy: ";")
+                for part in parts {
+                    let trimmed = part.trimmingCharacters(in: .whitespaces)
+                    if trimmed.lowercased().hasPrefix("boundary=") {
+                        var b = String(trimmed.dropFirst("boundary=".count))
+                        if b.hasPrefix("\"") && b.hasSuffix("\"") {
+                            b = String(b.dropFirst().dropLast())
+                        }
+                        boundary = b
+                        break
+                    }
+                }
+            }
+            if boundary != nil { break }
+        }
+        
+        guard let boundary = boundary else {
+            print("❌ [Upload] Boundary not found in headers")
+            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Invalid Content-Type or Boundary missing\"}")
+            return
+        }
+        
+        print("📂 [Upload] Boundary: \(boundary)")
+        
+        // 2. Find File Data
+        let boundaryData = ("--" + boundary).data(using: .utf8)!
+        
+        // Find start of first part
+        guard let firstPartRange = body.range(of: boundaryData) else {
+            print("❌ [Upload] First boundary not found in body")
+            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Boundary not found\"}")
+            return
+        }
+        
+        let afterFirstBoundary = body.subdata(in: firstPartRange.upperBound..<body.count)
+        
+        // Find headers end (\r\n\r\n)
+        let separator = "\r\n\r\n".data(using: .utf8)!
+        guard let headersEndRange = afterFirstBoundary.range(of: separator) else {
+            print("❌ [Upload] Headers end not found")
+            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Headers end not found\"}")
+            return
+        }
+        
+        let partHeadersData = afterFirstBoundary.subdata(in: 0..<headersEndRange.lowerBound)
+        let partHeadersString = String(data: partHeadersData, encoding: .utf8) ?? ""
+        print("📂 [Upload] Part Headers: \(partHeadersString)")
+        
+        // Extract Filename
+        var filename = "uploaded_file.mp4"
+        if let filenameRange = partHeadersString.range(of: "filename=\"") {
+            let afterFilename = partHeadersString[filenameRange.upperBound...]
+            if let endQuote = afterFilename.firstIndex(of: "\"") {
+                filename = String(afterFilename[..<endQuote])
+            }
+        }
+        
+        // Sanitize filename
+        filename = filename.replacingOccurrences(of: "/", with: "_")
+                           .replacingOccurrences(of: "\\", with: "_")
+        
+        // Extract Content
+        let contentStart = headersEndRange.upperBound
+        let contentData = afterFirstBoundary.subdata(in: contentStart..<afterFirstBoundary.count)
+        print("📂 [Upload] Content Data Size: \(contentData.count)")
+        
+        // Find end boundary
+        guard let endBoundaryRange = contentData.range(of: boundaryData) else {
+             print("❌ [Upload] End boundary not found. Content tail: \(String(data: contentData.suffix(50), encoding: .ascii) ?? "nil")")
+             sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"End boundary not found\"}")
+             return
+        }
+        
+        var fileDataEnd = endBoundaryRange.lowerBound
+        // Strip trailing \r\n if present
+        if fileDataEnd >= 2 {
+            let potentialCRLF = contentData.subdata(in: fileDataEnd-2..<fileDataEnd)
+            if potentialCRLF == "\r\n".data(using: .utf8)! {
+                fileDataEnd -= 2
+            }
+        }
+        
+        let fileData = contentData.subdata(in: 0..<fileDataEnd)
+        
+        // 3. Save File to Cache
+        do {
+            let fileURL = try CacheManager.shared.saveUploadedFile(data: fileData, filename: filename)
+            
+            // 4. Add to Playlist
+            PlaylistManager.shared.appendVideo(title: filename, url: fileURL.absoluteString, group: "Local Uploads")
+            
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"path\": \"\(fileURL.lastPathComponent)\"}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to save file: \(error)\"}")
+        }
     }
     
     private func parseParams(_ body: String) -> [String: String] {
@@ -235,7 +504,7 @@ class WebServer {
         return result
     }
     
-    private func sendResponse(connection: NWConnection, status: String = "200 OK", contentType: String = "text/html", body: String) {
+    private func sendResponse(client: Client, status: String = "200 OK", contentType: String = "text/html", body: String) {
         let response = """
         HTTP/1.1 \(status)\r
         Content-Type: \(contentType)\r
@@ -245,9 +514,15 @@ class WebServer {
         \(body)
         """
         
-        connection.send(content: response.data(using: .utf8), completion: .contentProcessed({ _ in
-            connection.cancel()
-        }))
+        if let data = response.data(using: .utf8) {
+            data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+                if let baseAddress = buffer.baseAddress {
+                    write(client.fd, baseAddress, data.count)
+                }
+            }
+        }
+        
+        closeClient(client)
     }
     
     private var htmlContent: String {
@@ -289,6 +564,28 @@ class WebServer {
             <div class="container">
                 <h1>QvPlayer Manager</h1>
                 
+                <h2>Remote Control</h2>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button onclick="control('play')">Play</button>
+                    <button onclick="control('pause')">Pause</button>
+                    <button onclick="control('toggle')" class="secondary">Toggle</button>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <button onclick="control('seek', -15)">-15s</button>
+                    <button onclick="control('seek', 15)">+15s</button>
+                </div>
+            </div>
+            
+            <div class="container">
+                <h2>Upload Local File</h2>
+                <form id="uploadForm">
+                    <input type="file" id="fileInput" name="file" style="margin-bottom: 10px;">
+                    <button type="button" onclick="uploadFile()" class="secondary">Upload & Play</button>
+                </form>
+                <div id="uploadStatus" style="margin-top: 10px; color: #666;"></div>
+            </div>
+            
+            <div class="container">
                 <h2>Add Stream</h2>
                 <form action="/add" method="POST">
                     <label>Channel Name</label>
@@ -339,6 +636,51 @@ class WebServer {
             <script>
                 let currentVideos = [];
                 
+                function playVideo(index) {
+                    fetch('/api/control/play_video?index=' + index, { method: 'POST' });
+                }
+
+                function control(action, time) {
+                    let url = '/api/control/' + action;
+                    if (time) {
+                        url += '?time=' + time;
+                    }
+                    fetch(url, { method: 'POST' });
+                }
+                
+                function uploadFile() {
+                    const fileInput = document.getElementById('fileInput');
+                    const file = fileInput.files[0];
+                    if (!file) {
+                        alert('Please select a file');
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const statusDiv = document.getElementById('uploadStatus');
+                    statusDiv.textContent = 'Uploading...';
+                    
+                    fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            statusDiv.textContent = 'Upload successful! Added to playlist.';
+                            loadPlaylist();
+                            fileInput.value = '';
+                        } else {
+                            statusDiv.textContent = 'Upload failed: ' + (data.error || 'Unknown error');
+                        }
+                    })
+                    .catch(error => {
+                        statusDiv.textContent = 'Upload error: ' + error;
+                    });
+                }
+                
                 function loadPlaylist() {
                     fetch('/api/playlist')
                         .then(response => response.json())
@@ -360,6 +702,7 @@ class WebServer {
                                         <div class="video-url">${escapeHtml(video.url)}</div>
                                     </div>
                                     <div class="video-actions">
+                                        <button onclick="playVideo(${index})">Play on TV</button>
                                         <button class="edit" onclick="openEdit(${index})">Edit</button>
                                         <button class="danger" onclick="deleteVideo(${index})">Delete</button>
                                     </div>
@@ -493,20 +836,36 @@ class WebServer {
     func getIPAddress() -> String? {
         var address: String?
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        
         if getifaddrs(&ifaddr) == 0 {
             var ptr = ifaddr
             while ptr != nil {
                 defer { ptr = ptr?.pointee.ifa_next }
                 
-                guard let interface = ptr?.pointee else { return nil }
+                guard let interface = ptr?.pointee else { continue }
                 let addrFamily = interface.ifa_addr.pointee.sa_family
                 
-                if addrFamily == UInt8(AF_INET) || addrFamily == UInt8(AF_INET6) {
+                // Check for IPv4 only
+                if addrFamily == UInt8(AF_INET) {
                     let name = String(cString: interface.ifa_name)
-                    if name == "en0" { // Usually WiFi
-                        var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                        getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
-                        address = String(cString: hostname)
+                    
+                    // Ignore loopback
+                    if name == "lo0" { continue }
+                    
+                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                    getnameinfo(interface.ifa_addr, socklen_t(interface.ifa_addr.pointee.sa_len), &hostname, socklen_t(hostname.count), nil, socklen_t(0), NI_NUMERICHOST)
+                    
+                    let ipAddress = String(cString: hostname)
+                    
+                    // Prefer en0 (WiFi) or en1 (Ethernet)
+                    if name == "en0" || name == "en1" {
+                        address = ipAddress
+                        break // Found a preferred interface
+                    }
+                    
+                    // If we haven't found a preferred one yet, store this one
+                    if address == nil {
+                        address = ipAddress
                     }
                 }
             }

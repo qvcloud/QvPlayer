@@ -3,6 +3,7 @@ import AVKit
 
 struct PlayerView: View {
     let video: Video
+    @AppStorage("playerEngine") private var playerEngine = "system"
     @StateObject private var viewModel = PlayerViewModel()
     
     @State private var showControls = false
@@ -13,6 +14,35 @@ struct PlayerView: View {
     @FocusState private var focusedField: FocusField?
     
     var body: some View {
+        ZStack {
+            if playerEngine == "ksplayer" {
+                KSPlayerView(video: video)
+            } else {
+                systemPlayer
+            }
+            
+            // Debug Info Overlay
+            VStack {
+                HStack {
+                    Text("Engine: \(playerEngine == "ksplayer" ? "KSPlayer" : "System (AVPlayer)")")
+                        .font(.system(size: 24, weight: .bold)) // Larger font for TV
+                        .foregroundColor(.yellow)
+                        .padding(12)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(12)
+                    Spacer()
+                }
+                Spacer()
+            }
+            .padding(60) // TV safe area
+            .allowsHitTesting(false)
+        }
+        .onAppear {
+            print("▶️ [PlayerView] Current Engine: \(playerEngine)")
+        }
+    }
+    
+    var systemPlayer: some View {
         ZStack {
             if let player = viewModel.player {
                 VideoPlayer(player: player)
@@ -27,6 +57,19 @@ struct PlayerView: View {
                                     .scaleEffect(2)
                                     .tint(.white)
                             }
+                        }
+                        
+                        if let error = viewModel.errorMessage {
+                            VStack {
+                                Text(error)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .background(Color.red.opacity(0.8))
+                                    .cornerRadius(8)
+                                Spacer()
+                            }
+                            .padding(.top, 50)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                         }
                     }
                     .overlay(alignment: .bottom) {

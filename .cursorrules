@@ -1,0 +1,28 @@
+# Project Context
+Project Name: QvPlayer
+Platform: tvOS (Apple TV)
+Language: Swift
+UI Framework: SwiftUI
+Architecture: MVVM (Model-View-ViewModel)
+
+# Key Libraries
+- KSPlayer (Video playback core)
+- FFmpegKit (Underlying media engine)
+- GCDWebServer (or custom WebServer implementation in Utilities/WebServer.swift)
+
+# Coding Guidelines
+- Use Swift 5+ concurrency (async/await) where possible, but be aware of legacy callback patterns in existing code.
+- Follow SwiftUI best practices for tvOS (FocusState, remote control handling).
+- Prefer functional programming patterns.
+- Ensure all UI strings are localizable (NSLocalizedString).
+
+# AI Behavior Rules
+- **Language**: Always respond in Chinese (Simplified).
+- **Tone**: Professional, concise, and helpful.
+- **Code Comments**: Add comments in Chinese for complex logic.
+- **File Modification**: When editing files, always check for existing imports and context.
+
+# Specific Project Knowledge
+- The project contains a custom `WebServer` in `Utilities/WebServer.swift` for handling local file uploads and remote control.
+- Playlist management is handled by `PlaylistManager`.
+- Local files are cached using `CacheManager`.

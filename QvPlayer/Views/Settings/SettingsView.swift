@@ -9,12 +9,19 @@ struct SettingsView: View {
     
     @AppStorage("webServerEnabled") private var webServerEnabled = true
     
+    @AppStorage("playerEngine") private var playerEngine = "system"
+    
     @AppStorage("selectedLanguage") private var selectedLanguage = "system"
     @State private var showRestartAlert = false
     
     var body: some View {
         Form {
             Section(header: Text("General")) {
+                Picker("Player Engine", selection: $playerEngine) {
+                    Text("System (AVPlayer)").tag("system")
+                    Text("KSPlayer (FFmpeg)").tag("ksplayer")
+                }
+                
                 Picker("Language", selection: $selectedLanguage) {
                     Text("Follow System").tag("system")
                     Text("English").tag("en")

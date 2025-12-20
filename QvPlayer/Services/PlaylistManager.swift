@@ -41,7 +41,8 @@ class PlaylistManager: ObservableObject {
     func appendVideo(title: String, url: String, group: String? = nil) {
         guard let validURL = URL(string: url) else { return }
         var videos = getPlaylistVideos()
-        let newVideo = Video(title: title, url: validURL, group: group, isLive: true)
+        let isLive = !validURL.isFileURL
+        let newVideo = Video(title: title, url: validURL, group: group, isLive: isLive)
         videos.append(newVideo)
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)

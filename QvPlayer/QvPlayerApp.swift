@@ -14,6 +14,9 @@ struct QvPlayerApp: App {
     init() {
         UserDefaults.standard.register(defaults: ["webServerEnabled": true])
         
+        // Clean old cache (older than 24 hours)
+        CacheManager.shared.cleanCache(olderThan: 24 * 60 * 60)
+        
         if UserDefaults.standard.bool(forKey: "webServerEnabled") {
             WebServer.shared.start()
         }

@@ -8,8 +8,9 @@ struct Video: Identifiable, Hashable, Codable {
     var isLive: Bool
     var description: String?
     var thumbnailURL: URL?
+    var cachedURL: URL?
     
-    init(id: UUID = UUID(), title: String, url: URL, group: String? = nil, isLive: Bool = false, description: String? = nil, thumbnailURL: URL? = nil) {
+    init(id: UUID = UUID(), title: String, url: URL, group: String? = nil, isLive: Bool = false, description: String? = nil, thumbnailURL: URL? = nil, cachedURL: URL? = nil) {
         self.id = id
         self.title = title
         self.url = url
@@ -17,5 +18,6 @@ struct Video: Identifiable, Hashable, Codable {
         self.isLive = isLive
         self.description = description
         self.thumbnailURL = thumbnailURL
+        self.cachedURL = cachedURL
     }
 }

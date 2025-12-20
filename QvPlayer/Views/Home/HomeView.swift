@@ -2,9 +2,10 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
+    @State private var navigationPath = NavigationPath()
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ScrollView {
                 VStack(alignment: .leading) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -50,6 +51,25 @@ struct HomeView: View {
                                             VideoCard(video: video)
                                         }
                                         .buttonStyle(.card)
+                                        .contextMenu {
+                                            if video.cachedURL == nil {
+                                                Button {
+                                                    Task {
+                                                        try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
+                                                        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                                                    }
+                                                } label: {
+                                                    Label("Cache Locally", systemImage: "arrow.down.circle")
+                                                }
+                                            } else {
+                                                Button(role: .destructive) {
+                                                    CacheManager.shared.removeCachedVideo(url: video.url)
+                                                    NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                                                } label: {
+                                                    Label("Remove Cache", systemImage: "trash")
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -68,6 +88,16 @@ struct HomeView: View {
                     }
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .commandPlayVideo)) { notification in
+                if let index = notification.userInfo?["index"] as? Int {
+                    let videos = PlaylistManager.shared.getPlaylistVideos()
+                    if index >= 0 && index < videos.count {
+                        let video = videos[index]
+                        navigationPath = NavigationPath()
+                        navigationPath.append(video)
+                    }
+                }
+            }
         }
     }
 }
@@ -77,10 +107,21 @@ struct VideoCard: View {
     
     var body: some View {
         VStack(alignment: .leading) {
-            VideoThumbnailView(url: video.url)
-                .aspectRatio(16/9, contentMode: .fit)
-                .cornerRadius(10)
-                .clipped()
+            ZStack(alignment: .topTrailing) {
+                VideoThumbnailView(url: video.url)
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .cornerRadius(10)
+                    .clipped()
+                
+                if video.cachedURL != nil {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .padding(6)
+                        .background(Color.black.opacity(0.6))
+                        .clipShape(Circle())
+                        .padding(6)
+                }
+            }
             
             Text(video.title)
                 .font(.headline)

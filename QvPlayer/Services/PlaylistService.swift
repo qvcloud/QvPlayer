@@ -49,10 +49,22 @@ class PlaylistService {
                 if components.count > 1 {
                     currentTitle = components.last?.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-            } else if trimmedLine.hasPrefix("http") || trimmedLine.hasPrefix("https") {
+            } else if !trimmedLine.hasPrefix("#") {
+                // Assume it's a URL (http, https, or file)
                 if let url = URL(string: trimmedLine) {
                     let title = currentTitle ?? "Unknown Channel"
-                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: true))
+                    // Check cache only for remote URLs
+                    var cachedURL: URL? = nil
+                    var isLive = true
+                    
+                    if url.isFileURL {
+                        cachedURL = url
+                        isLive = false
+                    } else if url.scheme?.lowercased().hasPrefix("http") == true {
+                         cachedURL = CacheManager.shared.isCached(remoteURL: url) ? CacheManager.shared.getCachedFileURL(for: url) : nil
+                    }
+                    
+                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: isLive, cachedURL: cachedURL))
                     currentTitle = nil
                     currentGroup = nil
                 }
