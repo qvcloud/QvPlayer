@@ -1,0 +1,50 @@
+import SwiftUI
+
+struct AboutView: View {
+    var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+    }
+    
+    var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+    
+    var body: some View {
+        VStack(spacing: 40) {
+            Image(systemName: "play.tv.fill")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 200, height: 200)
+                .foregroundStyle(.tint)
+                .shadow(radius: 10)
+            
+            VStack(spacing: 16) {
+                Text("QvPlayer")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+                
+                Text("Version \(appVersion) (Build \(buildNumber))")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                
+                Text("Designed for Apple TV")
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+                .frame(height: 50)
+            
+            Text("© 2025 Easton. All rights reserved.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.2)) // Subtle background
+    }
+}
+
+#Preview {
+    AboutView()
+}
