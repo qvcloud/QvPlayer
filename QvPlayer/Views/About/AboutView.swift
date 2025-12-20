@@ -23,7 +23,7 @@ struct AboutView: View {
                     .font(.largeTitle)
                     .fontWeight(.bold)
                 
-                Text("Version \(appVersion) (Build \(buildNumber))")
+                Text(String(format: NSLocalizedString("Version %@ (Build %@)", comment: "Version info"), appVersion, buildNumber))
                     .font(.title3)
                     .foregroundColor(.secondary)
                 

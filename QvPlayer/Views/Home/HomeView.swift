@@ -31,12 +31,27 @@ struct HomeView: View {
                         }
                         .padding(.top, 100)
                     } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 500), spacing: 40)], spacing: 40) {
-                            ForEach(viewModel.videos) { video in
-                                NavigationLink(value: video) {
-                                    VideoCard(video: video)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 500), spacing: 40)], spacing: 40, pinnedViews: [.sectionHeaders]) {
+                            ForEach(viewModel.videoGroups) { group in
+                                Section(header: 
+                                    HStack {
+                                        Text(group.name)
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white)
+                                            .padding(.vertical, 10)
+                                            .padding(.leading, 20) // Add some padding to align with title
+                                        Spacer()
+                                    }
+                                    .background(Color.black) // Solid background for sticky header
+                                ) {
+                                    ForEach(group.videos) { video in
+                                        NavigationLink(value: video) {
+                                            VideoCard(video: video)
+                                        }
+                                        .buttonStyle(.card)
+                                    }
                                 }
-                                .buttonStyle(.card)
                             }
                         }
                         .padding()
@@ -48,8 +63,8 @@ struct HomeView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(destination: AboutView()) {
-                        Label("About", systemImage: "info.circle")
+                    NavigationLink(destination: SettingsView()) {
+                        Label("Settings", systemImage: "gear")
                     }
                 }
             }

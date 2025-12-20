@@ -22,13 +22,29 @@ class PlaylistService {
         let lines = content.components(separatedBy: .newlines)
         
         var currentTitle: String?
+        var currentGroup: String?
         
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedLine.isEmpty { continue }
             
             if trimmedLine.hasPrefix("#EXTINF:") {
-                // Example: #EXTINF:-1,Channel Name
+                // Example: #EXTINF:-1 group-title="News",Channel Name
+                // Parse group-title
+                if let groupRange = trimmedLine.range(of: "group-title=\"([^\"]+)\"", options: .regularExpression) {
+                    let groupMatch = String(trimmedLine[groupRange])
+                    // Extract value inside quotes
+                    if let startQuote = groupMatch.firstIndex(of: "\""),
+                       let endQuote = groupMatch.lastIndex(of: "\""),
+                       startQuote != endQuote {
+                        let groupName = String(groupMatch[groupMatch.index(after: startQuote)..<endQuote])
+                        currentGroup = groupName
+                    }
+                } else {
+                    currentGroup = nil
+                }
+                
+                // Parse Title (everything after the last comma)
                 let components = trimmedLine.components(separatedBy: ",")
                 if components.count > 1 {
                     currentTitle = components.last?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,8 +52,9 @@ class PlaylistService {
             } else if trimmedLine.hasPrefix("http") || trimmedLine.hasPrefix("https") {
                 if let url = URL(string: trimmedLine) {
                     let title = currentTitle ?? "Unknown Channel"
-                    videos.append(Video(title: title, url: url, isLive: true))
+                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: true))
                     currentTitle = nil
+                    currentGroup = nil
                 }
             }
         }
@@ -48,7 +65,13 @@ class PlaylistService {
     func generateM3U(from videos: [Video]) -> String {
         var content = "#EXTM3U\n"
         for video in videos {
-            content += "#EXTINF:-1,\(video.title)\n"
+            var extInf = "#EXTINF:-1"
+            if let group = video.group, !group.isEmpty {
+                extInf += " group-title=\"\(group)\""
+            }
+            extInf += ",\(video.title)"
+            
+            content += "\(extInf)\n"
             content += "\(video.url.absoluteString)\n"
         }
         return content

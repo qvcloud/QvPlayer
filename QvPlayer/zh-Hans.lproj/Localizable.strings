@@ -1,0 +1,25 @@
+/* 
+  Localizable.strings
+  QvPlayer
+
+  Created by GitHub Copilot.
+*/
+
+"Loading Channels..." = "正在加载频道...";
+"Settings" = "设置";
+"Proxy Settings" = "代理设置";
+"Enable Proxy" = "启用代理";
+"Host" = "主机";
+"Port" = "端口";
+"Username" = "用户名";
+"Password" = "密码";
+"Optional" = "可选";
+"LAN Management" = "局域网管理";
+"Enable Web Manager" = "启用 Web 管理";
+"Address" = "地址";
+"About" = "关于";
+"About This Software" = "关于本软件";
+"Version" = "版本";
+"Version %@ (Build %@)" = "版本 %@ (构建版本 %@)";
+"Designed for Apple TV" = "专为 Apple TV 设计";
+"Manage Playlist via Web Browser:" = "通过 Web 浏览器管理播放列表：";

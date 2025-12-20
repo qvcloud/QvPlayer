@@ -38,10 +38,10 @@ class PlaylistManager: ObservableObject {
         return []
     }
     
-    func appendVideo(title: String, url: String) {
+    func appendVideo(title: String, url: String, group: String? = nil) {
         guard let validURL = URL(string: url) else { return }
         var videos = getPlaylistVideos()
-        let newVideo = Video(title: title, url: validURL, isLive: true)
+        let newVideo = Video(title: title, url: validURL, group: group, isLive: true)
         videos.append(newVideo)
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
@@ -56,7 +56,7 @@ class PlaylistManager: ObservableObject {
         savePlaylist(content: newContent)
     }
     
-    func updateVideo(at index: Int, title: String, url: String) {
+    func updateVideo(at index: Int, title: String, url: String, group: String? = nil) {
         var videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else { return }
         guard let validURL = URL(string: url) else { return }
@@ -64,6 +64,7 @@ class PlaylistManager: ObservableObject {
         var video = videos[index]
         video.title = title
         video.url = validURL
+        video.group = group
         videos[index] = video
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)

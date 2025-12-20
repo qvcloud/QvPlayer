@@ -1,0 +1,25 @@
+/* 
+  Localizable.strings
+  QvPlayer
+
+  Created by GitHub Copilot.
+*/
+
+"Loading Channels..." = "Loading Channels...";
+"Settings" = "Settings";
+"Proxy Settings" = "Proxy Settings";
+"Enable Proxy" = "Enable Proxy";
+"Host" = "Host";
+"Port" = "Port";
+"Username" = "Username";
+"Password" = "Password";
+"Optional" = "Optional";
+"LAN Management" = "LAN Management";
+"Enable Web Manager" = "Enable Web Manager";
+"Address" = "Address";
+"About" = "About";
+"About This Software" = "About This Software";
+"Version" = "Version";
+"Version %@ (Build %@)" = "Version %@ (Build %@)";
+"Designed for Apple TV" = "Designed for Apple TV";
+"Manage Playlist via Web Browser:" = "Manage Playlist via Web Browser:";

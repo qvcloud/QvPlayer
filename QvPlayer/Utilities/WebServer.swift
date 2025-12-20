@@ -77,7 +77,7 @@ class WebServer {
             sendResponse(connection: connection, body: htmlContent)
         } else if method == "GET" && path == "/api/playlist" {
             let videos = PlaylistManager.shared.getPlaylistVideos()
-            let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString] }
+            let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
             if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
                let jsonString = String(data: data, encoding: .utf8) {
                 sendResponse(connection: connection, contentType: "application/json", body: jsonString)
@@ -101,7 +101,8 @@ class WebServer {
                 let params = parseParams(body)
                 if let indexStr = params["index"], let index = Int(indexStr),
                    let title = params["title"], let url = params["url"] {
-                    PlaylistManager.shared.updateVideo(at: index, title: title, url: url)
+                    let group = params["group"]
+                    PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
                     sendResponse(connection: connection, contentType: "application/json", body: "{\"success\": true}")
                 } else {
                     sendResponse(connection: connection, status: "400 Bad Request", body: "Missing parameters")
@@ -128,7 +129,8 @@ class WebServer {
                 let params = parseParams(body)
                 
                 if let title = params["title"], let url = params["url"] {
-                    PlaylistManager.shared.appendVideo(title: title, url: url)
+                    let group = params["group"]
+                    PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
                     let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
                     sendResponse(connection: connection, body: successPage)
                 } else {
@@ -212,6 +214,8 @@ class WebServer {
                 <form action="/add" method="POST">
                     <label>Channel Name</label>
                     <input type="text" name="title" placeholder="e.g. CCTV-1" required>
+                    <label>Group (Optional)</label>
+                    <input type="text" name="group" placeholder="e.g. News">
                     <label>Stream URL (m3u8)</label>
                     <input type="text" name="url" placeholder="http://..." required>
                     <button type="submit" class="secondary">Add to Playlist</button>
@@ -242,6 +246,8 @@ class WebServer {
                     <input type="hidden" id="editIndex">
                     <label>Channel Name</label>
                     <input type="text" id="editTitle">
+                    <label>Group</label>
+                    <input type="text" id="editGroup">
                     <label>Stream URL</label>
                     <input type="text" id="editUrl">
                     <div class="modal-actions">
@@ -266,7 +272,12 @@ class WebServer {
                                 li.className = 'video-item';
                                 li.innerHTML = `
                                     <div class="video-info">
-                                        <div class="video-title">${escapeHtml(video.title)}</div>
+                                        <div class="video-title">
+                                            ${escapeHtml(video.title)} 
+                                            <span style="font-weight:normal; color:#666; font-size:0.8em; background:#eee; padding:2px 6px; border-radius:4px; margin-left: 8px;">
+                                                ${escapeHtml(video.group || 'Ungrouped')}
+                                            </span>
+                                        </div>
                                         <div class="video-url">${escapeHtml(video.url)}</div>
                                     </div>
                                     <div class="video-actions">
@@ -293,6 +304,7 @@ class WebServer {
                     const video = currentVideos[index];
                     document.getElementById('editIndex').value = index;
                     document.getElementById('editTitle').value = video.title;
+                    document.getElementById('editGroup').value = video.group || '';
                     document.getElementById('editUrl').value = video.url;
                     document.getElementById('editModal').classList.add('active');
                 }
@@ -304,12 +316,13 @@ class WebServer {
                 function saveEdit() {
                     const index = document.getElementById('editIndex').value;
                     const title = document.getElementById('editTitle').value;
+                    const group = document.getElementById('editGroup').value;
                     const url = document.getElementById('editUrl').value;
                     
                     fetch('/api/edit', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                        body: `index=${index}&title=${encodeURIComponent(title)}&url=${encodeURIComponent(url)}`
+                        body: `index=${index}&title=${encodeURIComponent(title)}&group=${encodeURIComponent(group)}&url=${encodeURIComponent(url)}`
                     }).then(() => {
                         closeModal();
                         loadPlaylist();

@@ -9,8 +9,14 @@ import SwiftUI
 
 @main
 struct QvPlayerApp: App {
+    @AppStorage("webServerEnabled") private var webServerEnabled = true
+    
     init() {
-        WebServer.shared.start()
+        UserDefaults.standard.register(defaults: ["webServerEnabled": true])
+        
+        if UserDefaults.standard.bool(forKey: "webServerEnabled") {
+            WebServer.shared.start()
+        }
     }
     
     var body: some Scene {
