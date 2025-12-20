@@ -1,12 +1,9 @@
 {
   "images" : [
     {
+      "filename" : "Content.jpg",
       "idiom" : "tv",
       "scale" : "1x"
-    },
-    {
-      "idiom" : "tv",
-      "scale" : "2x"
     }
   ],
   "info" : {

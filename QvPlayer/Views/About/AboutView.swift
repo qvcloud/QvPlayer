@@ -30,6 +30,21 @@ struct AboutView: View {
                 Text("Designed for Apple TV")
                     .font(.headline)
                     .foregroundColor(.secondary)
+                
+                if let serverURL = WebServer.shared.serverURL {
+                    VStack(spacing: 8) {
+                        Text("Manage Playlist via Web Browser:")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        Text(serverURL)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(12)
+                }
             }
             
             Spacer()

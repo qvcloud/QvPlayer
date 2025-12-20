@@ -7,12 +7,19 @@ struct HomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading) {
-                    Text("QvPlayer")
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .foregroundColor(.white)
-                        .padding(.leading)
-                        .padding(.top)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("QvPlayer")
+                            .font(.largeTitle)
+                            .fontWeight(.heavy)
+                            .foregroundColor(.white)
+                        
+                        Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.leading)
+                    .padding(.top)
                     
                     if viewModel.isLoading {
                         HStack {
@@ -55,16 +62,10 @@ struct VideoCard: View {
     
     var body: some View {
         VStack(alignment: .leading) {
-            ZStack {
-                Color.gray.opacity(0.3)
-                Image(systemName: "play.tv.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 50, height: 50)
-                    .foregroundColor(.white.opacity(0.8))
-            }
-            .aspectRatio(16/9, contentMode: .fit)
-            .cornerRadius(10)
+            VideoThumbnailView(url: video.url)
+                .aspectRatio(16/9, contentMode: .fit)
+                .cornerRadius(10)
+                .clipped()
             
             Text(video.title)
                 .font(.headline)

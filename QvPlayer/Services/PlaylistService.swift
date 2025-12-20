@@ -24,14 +24,18 @@ class PlaylistService {
         var currentTitle: String?
         
         for line in lines {
-            if line.hasPrefix("#EXTINF:") {
+            let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedLine.isEmpty { continue }
+            
+            if trimmedLine.hasPrefix("#EXTINF:") {
                 // Example: #EXTINF:-1,Channel Name
-                let components = line.components(separatedBy: ",")
+                let components = trimmedLine.components(separatedBy: ",")
                 if components.count > 1 {
                     currentTitle = components.last?.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-            } else if line.hasPrefix("http") || line.hasPrefix("https") {
-                if let url = URL(string: line.trimmingCharacters(in: .whitespacesAndNewlines)), let title = currentTitle {
+            } else if trimmedLine.hasPrefix("http") || trimmedLine.hasPrefix("https") {
+                if let url = URL(string: trimmedLine) {
+                    let title = currentTitle ?? "Unknown Channel"
                     videos.append(Video(title: title, url: url, isLive: true))
                     currentTitle = nil
                 }
@@ -39,6 +43,15 @@ class PlaylistService {
         }
         
         return videos
+    }
+    
+    func generateM3U(from videos: [Video]) -> String {
+        var content = "#EXTM3U\n"
+        for video in videos {
+            content += "#EXTINF:-1,\(video.title)\n"
+            content += "\(video.url.absoluteString)\n"
+        }
+        return content
     }
     
     // Future: Add methods to save/load playlists from UserDefaults or SwiftData

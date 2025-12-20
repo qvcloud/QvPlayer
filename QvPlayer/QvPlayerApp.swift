@@ -9,6 +9,10 @@ import SwiftUI
 
 @main
 struct QvPlayerApp: App {
+    init() {
+        WebServer.shared.start()
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()

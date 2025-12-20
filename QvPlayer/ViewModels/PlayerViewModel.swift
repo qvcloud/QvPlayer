@@ -1,6 +1,7 @@
 import Foundation
 import AVKit
 import Combine
+import CoreMedia
 
 @MainActor
 class PlayerViewModel: ObservableObject {
@@ -12,6 +13,7 @@ class PlayerViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var rateObserver: NSKeyValueObservation?
+    private var itemStatusObserver: NSKeyValueObservation?
     
     init() {
         // Setup audio session for playback if needed (more relevant for iOS but good practice)
@@ -19,8 +21,58 @@ class PlayerViewModel: ObservableObject {
     }
     
     func load(video: Video) {
+        print("🎬 [Player] Loading video: \(video.title) - \(video.url)")
         self.currentVideo = video
         let playerItem = AVPlayerItem(url: video.url)
+        
+        // Set external metadata for tvOS Info Panel
+        var metadata: [AVMetadataItem] = []
+        
+        let titleItem = AVMutableMetadataItem()
+        titleItem.identifier = .commonIdentifierTitle
+        titleItem.value = video.title as NSString
+        titleItem.extendedLanguageTag = "und"
+        metadata.append(titleItem)
+        
+        if let desc = video.description {
+            let descItem = AVMutableMetadataItem()
+            descItem.identifier = .commonIdentifierDescription
+            descItem.value = desc as NSString
+            descItem.extendedLanguageTag = "und"
+            metadata.append(descItem)
+        }
+        
+        playerItem.externalMetadata = metadata
+        
+        // Add Error Log Observer
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemNewErrorLogEntry, object: playerItem, queue: .main) { notification in
+            if let item = notification.object as? AVPlayerItem, let log = item.errorLog()?.events.last {
+                print("❌ [Player Error] \(log.errorDomain): \(log.errorComment ?? "Unknown error")")
+            }
+        }
+        
+        // Add Access Log Observer (Connection status)
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemNewAccessLogEntry, object: playerItem, queue: .main) { notification in
+            if let item = notification.object as? AVPlayerItem, let log = item.accessLog()?.events.last {
+                print("📡 [Player Access] URI: \(log.uri ?? "nil") | IP: \(log.serverAddress ?? "nil") | Bitrate: \(log.indicatedBitrate)")
+            }
+        }
+        
+        // Observe Item Status
+        itemStatusObserver = playerItem.observe(\.status) { item, _ in
+            switch item.status {
+            case .readyToPlay:
+                print("✅ [Player Status] Ready to play")
+            case .failed:
+                if let error = item.error {
+                    print("❌ [Player Status] Failed: \(error.localizedDescription)")
+                }
+            case .unknown:
+                print("❓ [Player Status] Unknown")
+            @unknown default:
+                break
+            }
+        }
         
         if let player = self.player {
             player.replaceCurrentItem(with: playerItem)
@@ -62,5 +114,12 @@ class PlayerViewModel: ObservableObject {
         } else {
             play()
         }
+    }
+    
+    func seek(by seconds: Double) {
+        guard let player = player else { return }
+        let currentTime = player.currentTime()
+        let newTime = CMTimeAdd(currentTime, CMTimeMakeWithSeconds(seconds, preferredTimescale: 600))
+        player.seek(to: newTime)
     }
 }

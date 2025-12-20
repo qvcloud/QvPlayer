@@ -6,7 +6,11 @@ struct PlayerView: View {
     @StateObject private var viewModel = PlayerViewModel()
     
     @State private var showControls = false
-    @FocusState private var isPlayButtonFocused: Bool
+    
+    enum FocusField {
+        case rewind, playPause, fastForward
+    }
+    @FocusState private var focusedField: FocusField?
     
     var body: some View {
         ZStack {
@@ -28,6 +32,18 @@ struct PlayerView: View {
                     .overlay(alignment: .bottom) {
                         // Custom Controls Overlay
                         HStack(spacing: 40) {
+                            if !video.isLive {
+                                Button(action: {
+                                    viewModel.seek(by: -10)
+                                }) {
+                                    Image(systemName: "gobackward.10")
+                                        .font(.system(size: 40))
+                                        .padding()
+                                }
+                                .buttonStyle(.card)
+                                .focused($focusedField, equals: .rewind)
+                            }
+
                             Button(action: {
                                 viewModel.togglePlayPause()
                             }) {
@@ -36,22 +52,32 @@ struct PlayerView: View {
                                     .padding()
                             }
                             .buttonStyle(.card)
-                            .focused($isPlayButtonFocused)
+                            .focused($focusedField, equals: .playPause)
                             
-                            // You can add more buttons here (e.g. Info, Subtitles)
+                            if !video.isLive {
+                                Button(action: {
+                                    viewModel.seek(by: 10)
+                                }) {
+                                    Image(systemName: "goforward.10")
+                                        .font(.system(size: 40))
+                                        .padding()
+                                }
+                                .buttonStyle(.card)
+                                .focused($focusedField, equals: .fastForward)
+                            }
                         }
                         .padding(.bottom, 60)
-                        .opacity(showControls || isPlayButtonFocused ? 1 : 0)
-                        .animation(.easeInOut, value: showControls || isPlayButtonFocused)
+                        .opacity(showControls || focusedField != nil ? 1 : 0)
+                        .animation(.easeInOut, value: showControls || (focusedField != nil))
                     }
                     .onTapGesture {
                         showControls.toggle()
                     }
                     // Auto-hide controls after delay
-                    .onChange(of: showControls) { newValue in
+                    .onChange(of: showControls) { _, newValue in
                         if newValue {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
-                                if !isPlayButtonFocused {
+                                if focusedField == nil {
                                     showControls = false
                                 }
                             }
