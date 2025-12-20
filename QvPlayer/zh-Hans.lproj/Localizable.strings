@@ -23,3 +23,8 @@
 "Version %@ (Build %@)" = "版本 %@ (构建版本 %@)";
 "Designed for Apple TV" = "专为 Apple TV 设计";
 "Manage Playlist via Web Browser:" = "通过 Web 浏览器管理播放列表：";
+"General" = "通用";
+"Language" = "语言";
+"Follow System" = "跟随系统";
+"Restart Required" = "需要重启";
+"Please restart the app to apply language changes." = "请重启应用以应用语言更改。";

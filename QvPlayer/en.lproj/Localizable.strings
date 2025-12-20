@@ -23,3 +23,8 @@
 "Version %@ (Build %@)" = "Version %@ (Build %@)";
 "Designed for Apple TV" = "Designed for Apple TV";
 "Manage Playlist via Web Browser:" = "Manage Playlist via Web Browser:";
+"General" = "General";
+"Language" = "Language";
+"Follow System" = "Follow System";
+"Restart Required" = "Restart Required";
+"Please restart the app to apply language changes." = "Please restart the app to apply language changes.";

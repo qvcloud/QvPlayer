@@ -9,8 +9,28 @@ struct SettingsView: View {
     
     @AppStorage("webServerEnabled") private var webServerEnabled = true
     
+    @AppStorage("selectedLanguage") private var selectedLanguage = "system"
+    @State private var showRestartAlert = false
+    
     var body: some View {
         Form {
+            Section(header: Text("General")) {
+                Picker("Language", selection: $selectedLanguage) {
+                    Text("Follow System").tag("system")
+                    Text("English").tag("en")
+                    Text("简体中文").tag("zh-Hans")
+                }
+                .onChange(of: selectedLanguage) { _, newValue in
+                    if newValue == "system" {
+                        UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+                    } else {
+                        UserDefaults.standard.set([newValue], forKey: "AppleLanguages")
+                    }
+                    UserDefaults.standard.synchronize()
+                    showRestartAlert = true
+                }
+            }
+            
             Section(header: Text("Proxy Settings")) {
                 Toggle("Enable Proxy", isOn: $proxyEnabled)
                 
@@ -58,6 +78,11 @@ struct SettingsView: View {
                     HStack {
                         Text("Address")
                         Spacer()
+        .alert("Restart Required", isPresented: $showRestartAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please restart the app to apply language changes.")
+        }
                         Text(url)
                             .foregroundColor(.secondary)
                     }
