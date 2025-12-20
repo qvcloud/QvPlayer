@@ -108,7 +108,7 @@ struct PlayerView: View {
     var systemPlayerContent: some View {
         ZStack {
             if let player = viewModel.player {
-                VideoPlayer(player: player)
+                SystemVideoPlayer(player: player)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .edgesIgnoringSafeArea(.all)
                     .overlay {

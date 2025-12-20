@@ -23,7 +23,22 @@ class PlayerViewModel: ObservableObject {
     private var statusTimer: Timer?
     private var observers: [NSObjectProtocol] = []
     
+    deinit {
+        print("🗑 [PlayerViewModel] Deinit")
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+        statusTimer?.invalidate()
+        timeControlStatusObserver?.invalidate()
+        rateObserver?.invalidate()
+        itemStatusObserver?.invalidate()
+        waitingReasonObserver?.invalidate()
+    }
+    
     init() {
+        setupAudioSession()
+        setupRemoteCommands()
+    }
+    
+    private func setupAudioSession() {
         // Setup audio session for playback
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
@@ -32,7 +47,6 @@ class PlayerViewModel: ObservableObject {
             print("❌ [AudioSession] Failed to setup: \(error)")
             DebugLogger.shared.error("[AudioSession] Failed to setup: \(error)")
         }
-        setupRemoteCommands()
     }
     
     private func setupRemoteCommands() {
@@ -62,6 +76,7 @@ class PlayerViewModel: ObservableObject {
     }
     
     func load(video: Video) {
+        setupAudioSession() // Ensure session is active
         print("🎬 [Player] Loading video: \(video.title) - \(video.url)")
         DebugLogger.shared.info("Loading video: \(video.title)")
         self.errorMessage = nil
@@ -122,6 +137,46 @@ class PlayerViewModel: ObservableObject {
             case .readyToPlay:
                 print("✅ [Player Status] Ready to play")
                 DebugLogger.shared.info("Player Status: Ready to play")
+                
+                let videoTracks = item.asset.tracks(withMediaType: .video)
+                if let track = videoTracks.first {
+                    print("📹 [Player] Video track found: \(track)")
+                    
+                    // Log Codec Info
+                    for format in track.formatDescriptions {
+                        let mediaSubType = CMFormatDescriptionGetMediaSubType(format as! CMFormatDescription)
+                        let codecString =  String(format: "%c%c%c%c",
+                                                  (mediaSubType >> 24) & 0xff,
+                                                  (mediaSubType >> 16) & 0xff,
+                                                  (mediaSubType >> 8) & 0xff,
+                                                  mediaSubType & 0xff)
+                        print("   Codec: \(codecString)")
+                        DebugLogger.shared.info("Video Codec: \(codecString)")
+                        
+                        // Check for AV1 (av01) which might not be supported by AVPlayer on all devices
+                        if codecString == "av01" {
+                            let msg = "⚠️ AV1 Codec detected. System player may not support video. Please switch to KSPlayer."
+                            print(msg)
+                            DebugLogger.shared.warning(msg)
+                            Task { @MainActor in
+                                self.errorMessage = msg
+                            }
+                        }
+                    }
+                    
+                    print("   Enabled: \(track.isEnabled)")
+                    print("   Self Contained: \(track.isSelfContained)")
+                    print("   Estimated Data Rate: \(track.estimatedDataRate)")
+                    
+                    // Check presentation size
+                    print("   Presentation Size: \(item.presentationSize)")
+                    if item.presentationSize == .zero {
+                        DebugLogger.shared.warning("Player ready but presentation size is zero!")
+                    }
+                } else {
+                    print("⚠️ [Player] No video track found!")
+                    DebugLogger.shared.warning("No video track found!")
+                }
             case .failed:
                 if let error = item.error {
                     print("❌ [Player Status] Failed: \(error.localizedDescription)")
@@ -143,6 +198,10 @@ class PlayerViewModel: ObservableObject {
         } else {
             self.player = AVPlayer(playerItem: playerItem)
         }
+        
+        // Ensure player is not muted and volume is up
+        self.player?.isMuted = false
+        self.player?.volume = 1.0
         
         // Observe buffering status
         timeControlStatusObserver = player?.observe(\.timeControlStatus) { [weak self] player, _ in
@@ -229,10 +288,5 @@ class PlayerViewModel: ObservableObject {
             "duration": duration.isNaN ? 0 : duration
         ]
         NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
-    }
-    
-    deinit {
-        statusTimer?.invalidate()
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
     }
 }

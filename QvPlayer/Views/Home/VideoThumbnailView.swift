@@ -33,6 +33,9 @@ struct VideoThumbnailView: View {
     }
     
     private func generateThumbnail() async {
+        DebugLogger.shared.info("Generating thumbnail for: \(url.lastPathComponent)")
+        
+        // 1. Try AVAssetImageGenerator first (Fastest, Native)
         let asset = AVURLAsset(url: url)
         
         // Optimization: Don't decode full resolution for thumbnails
@@ -55,14 +58,14 @@ struct VideoThumbnailView: View {
                 self.isLoading = false
             }
         } catch {
-            print("Thumbnail generation failed for \(url): \(error)")
+            DebugLogger.shared.warning("AVAssetImageGenerator failed for \(url.lastPathComponent): \(error.localizedDescription). Retrying with KSPlayer...")
             await generateThumbnailWithFFmpeg()
         }
     }
 
     private func generateThumbnailWithFFmpeg() async {
         #if canImport(KSPlayer)
-        print("📸 [Thumbnail] Attempting KSPlayer fallback for: \(url.lastPathComponent)")
+        DebugLogger.shared.info("Attempting KSPlayer fallback for: \(url.absoluteString)")
         // Use KSPlayer's ThumbnailController
         let controller = ThumbnailController(thumbnailCount: 1)
         do {
@@ -72,17 +75,17 @@ struct VideoThumbnailView: View {
                     self.image = first.image
                     self.isLoading = false
                 }
-                print("✅ [Thumbnail] KSPlayer success")
+                DebugLogger.shared.info("KSPlayer thumbnail success for: \(url.lastPathComponent)")
             } else {
-                print("❌ [Thumbnail] KSPlayer returned no thumbnails")
+                DebugLogger.shared.error("KSPlayer returned no thumbnails for: \(url.lastPathComponent)")
                 await MainActor.run { self.isLoading = false }
             }
         } catch {
-            print("❌ [Thumbnail] KSPlayer failed: \(error)")
+            DebugLogger.shared.error("KSPlayer thumbnail failed for \(url.lastPathComponent): \(error.localizedDescription)")
             await MainActor.run { self.isLoading = false }
         }
         #else
-        print("❌ [Thumbnail] KSPlayer not available for fallback")
+        DebugLogger.shared.error("KSPlayer not available for fallback")
         await MainActor.run {
             self.isLoading = false
         }
