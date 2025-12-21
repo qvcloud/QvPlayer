@@ -11,42 +11,66 @@ class DatabaseManager {
         createTable()
     }
     
-    private var dbPath: String {
-        guard let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-            DebugLogger.shared.error("📝 [SQL] Fatal: Could not access Documents directory")
+    private var primaryDbPath: String {
+        //TODO: 这里为什么会失败在真机上？？？
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return ""
         }
-        return documentsDirectory.appendingPathComponent(dbName).path
+        return appSupport.appendingPathComponent(dbName).path
+    }
+    
+    private var fallbackDbPath: String {
+
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            return ""
+        }
+        return caches.appendingPathComponent(dbName).path
     }
     
     private func openDatabase() {
-        let path = dbPath
-        if path.isEmpty { return }
+        // Try primary path (Application Support)
+        if tryOpenDatabase(at: primaryDbPath) {
+            return
+        }
+        
+        DebugLogger.shared.warning("📝 [SQL] Failed to open primary database. Trying fallback to Caches...")
+        
+        // Try fallback path (Caches)
+        if tryOpenDatabase(at: fallbackDbPath) {
+            DebugLogger.shared.warning("📝 [SQL] Using fallback database in Caches directory.")
+            return
+        }
+        
+        DebugLogger.shared.error("📝 [SQL] Fatal: Could not open database in any location.")
+        self.db = nil
+    }
+    
+    private func tryOpenDatabase(at path: String) -> Bool {
+        if path.isEmpty { return false }
         
         // Ensure directory exists
         let dir = URL(fileURLWithPath: path).deletingLastPathComponent()
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: nil)
         } catch {
-            DebugLogger.shared.error("📝 [SQL] Failed to create directory: \(error.localizedDescription)")
+            DebugLogger.shared.error("📝 [SQL] Failed to create directory at \(path): \(error.localizedDescription)")
         }
         
-        DebugLogger.shared.info("📝 [SQL] Opening database at: \(path)")
+        DebugLogger.shared.info("📝 [SQL] Attempting to open database at: \(path)")
         
-        // Use sqlite3_open_v2 for better control and thread safety
         var dbPtr: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         if sqlite3_open_v2(path, &dbPtr, flags, nil) == SQLITE_OK {
             self.db = dbPtr
-            DebugLogger.shared.info("📝 [SQL] Database opened successfully")
+            DebugLogger.shared.info("📝 [SQL] Database opened successfully at \(path)")
+            return true
         } else {
-            DebugLogger.shared.error("Error opening database at \(path)")
             if let dbPtr = dbPtr {
                 let errorMsg = String(cString: sqlite3_errmsg(dbPtr))
-                DebugLogger.shared.error("SQLite Error: \(errorMsg)")
+                DebugLogger.shared.error("SQLite Error at \(path): \(errorMsg)")
                 sqlite3_close(dbPtr)
             }
-            self.db = nil
+            return false
         }
     }
     
