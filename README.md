@@ -89,3 +89,7 @@ If you encounter a video with sound but no image (black screen), it is likely us
 ## 📝 License
 
 This project is for educational and personal use. Please refer to the licenses of third-party libraries (KSPlayer, FFmpegKit) for their respective usage terms.
+
+## 💬 Community
+
+Join our Telegram group for discussions and support: [https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)

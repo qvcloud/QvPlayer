@@ -158,8 +158,8 @@ class HomeViewModel: ObservableObject {
                     // Re-group to update UI
                     self.groupVideos(self.videos)
                     
-                    // Save to playlist
-                    PlaylistManager.shared.updateVideoLatency(at: index, latency: duration, lastCheck: Date())
+                    // Save to DB
+                    DatabaseManager.shared.saveLatency(for: video.url.absoluteString, latency: duration, lastCheck: Date())
                 }
             }
         } catch {
@@ -171,8 +171,8 @@ class HomeViewModel: ObservableObject {
                     self.videos[index].lastLatencyCheck = Date()
                     self.groupVideos(self.videos)
                     
-                    // Save to playlist
-                    PlaylistManager.shared.updateVideoLatency(at: index, latency: -1, lastCheck: Date())
+                    // Save to DB
+                    DatabaseManager.shared.saveLatency(for: video.url.absoluteString, latency: -1, lastCheck: Date())
                 }
             }
         }

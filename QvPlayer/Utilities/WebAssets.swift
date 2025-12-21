@@ -405,6 +405,7 @@ struct WebAssets {
                 <footer style="text-align: center; margin-top: 40px; padding-bottom: 20px; color: var(--secondary-text); font-size: 14px;">
                     <p>&copy; <span id="year"></span> QvPlayer. All rights reserved.</p>
                     <p>Open Source: <a href="https://github.com/qvcloud/QvPlayer" target="_blank" style="color: var(--primary-color); text-decoration: none;">https://github.com/qvcloud/QvPlayer</a></p>
+                    <p>Telegram: <a href="https://t.me/+KF2GIXtuEOY3MWI1" target="_blank" style="color: var(--primary-color); text-decoration: none;">https://t.me/+KF2GIXtuEOY3MWI1</a></p>
                     <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
                 </footer>
             </div>

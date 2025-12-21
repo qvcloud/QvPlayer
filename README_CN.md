@@ -89,3 +89,7 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 ## 📝 许可证
 
 本项目仅供教育和个人使用。关于第三方库 (KSPlayer, FFmpegKit) 的使用条款，请参阅它们各自的许可证。
+
+## 💬 社区
+
+加入我们的 Telegram 群组进行讨论和支持：[https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)

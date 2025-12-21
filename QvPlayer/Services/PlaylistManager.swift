@@ -90,7 +90,18 @@ class PlaylistManager: ObservableObject {
     
     func getPlaylistVideos() -> [Video] {
         if let content = loadPlaylist() {
-            return PlaylistService.shared.parseM3U(content: content)
+            var videos = PlaylistService.shared.parseM3U(content: content)
+            
+            // Merge with SQLite metadata
+            let metadata = DatabaseManager.shared.getAllMetadata()
+            for i in 0..<videos.count {
+                let urlString = videos[i].url.absoluteString
+                if let data = metadata[urlString] {
+                    videos[i].latency = data.0
+                    videos[i].lastLatencyCheck = data.1
+                }
+            }
+            return videos
         }
         return []
     }
@@ -286,19 +297,6 @@ class PlaylistManager: ObservableObject {
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         try savePlaylist(content: newContent)
-    }
-    
-    func updateVideoLatency(at index: Int, latency: Double, lastCheck: Date) {
-        var videos = getPlaylistVideos()
-        guard index >= 0 && index < videos.count else { return }
-        
-        var video = videos[index]
-        video.latency = latency
-        video.lastLatencyCheck = lastCheck
-        videos[index] = video
-        
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try? savePlaylist(content: newContent)
     }
 }
 
