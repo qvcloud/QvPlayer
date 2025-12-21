@@ -96,7 +96,7 @@ struct KSPlayerView: UIViewRepresentable {
         options.maxBufferDuration = 20 
         
         // Enable detailed logging
-        options.setShowDebugLog(true)
+        // options.setShowDebugLog(true) // API not available in this version
         
         return options
     }
@@ -217,33 +217,35 @@ struct KSPlayerView: UIViewRepresentable {
                      stats.bitrate = Double(track.bitRate)
                 }
                 
+                // Calculate Download Speed
+                let currentTime = Date().timeIntervalSince1970
+                var currentBytes: Int64 = 0
+                
                 // Detailed Stream Info Logging
                 if let dynamicInfo = player.dynamicInfo {
                     currentBytes = dynamicInfo.bytesRead
+                    // Use player properties for missing dynamicInfo fields
                     let debugInfo = """
                     [Stream Info]
                     Bytes Read: \(dynamicInfo.bytesRead)
                     Buffer Time: \(String(format: "%.2f", player.playableTime - player.currentPlaybackTime))s
-                    Video Width: \(dynamicInfo.videoWidth)
-                    Video Height: \(dynamicInfo.videoHeight)
-                    Frame Rate: \(String(format: "%.2f", dynamicInfo.frameRate))
-                    Bitrate: \(String(format: "%.2f", dynamicInfo.bitRate / 1000)) kbps
-                    Decode FPS: \(String(format: "%.2f", dynamicInfo.decodeFrameRate))
+                    Video Resolution: \(Int(player.naturalSize.width))x\(Int(player.naturalSize.height))
+                    Frame Rate: \(String(format: "%.2f", player.nominalFrameRate))
+                    Bitrate: \(String(format: "%.2f", stats.bitrate / 1000)) kbps
                     """
-                    DebugLogger.shared.info(debugInfo)
+                    // Reduce log frequency to avoid spamming
+                    if Int(currentTime) % 5 == 0 {
+                        DebugLogger.shared.info(debugInfo)
+                    }
                 }
-                
-                // Calculate Download Speed
-                let currentTime = Date().timeIntervalSince1970
-                var currentBytes: Int64 = 0
                 
                 // Update Online Status
                 stats.status = (player.isPlaying || player.duration > 0) ? "Online" : "Offline"
                 stats.serverAddress = serverAddress
                 
-                if let dynamicInfo = player.dynamicInfo {
-                    currentBytes = dynamicInfo.bytesRead
-                }
+                // if let dynamicInfo = player.dynamicInfo {
+                //    currentBytes = dynamicInfo.bytesRead
+                // }
                 
                 let currentPlayableTime = player.playableTime
                 
