@@ -1,98 +1,109 @@
 # QvPlayer for tvOS
 
-QvPlayer is a powerful and flexible video player designed specifically for Apple TV (tvOS). It combines the efficiency of the native system player with the versatility of FFmpeg, ensuring playback support for a wide range of video formats including MP4, MKV, AVI, and modern codecs like AV1.
+QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放器。它结合了原生系统播放器的高效性与 FFmpeg 的多功能性，确保支持广泛的视频格式，包括 MP4、MKV、AVI 以及 AV1 等现代编码格式。
 
-## ✨ Key Features
+## ✨ 主要功能
 
-*   **Dual Playback Engines**:
-    *   **System Player (AVPlayer)**: Best for standard formats (H.264, HEVC/H.265). Uses hardware decoding for maximum battery efficiency and performance.
-    *   **KSPlayer (FFmpeg)**: A robust fallback engine that supports virtually any format (MKV, AVI, WMV, FLV) and codecs that the system might not support natively (e.g., AV1).
-*   **Web Management Interface**: Built-in web server allows you to manage playlists and upload files directly from your computer's browser.
-*   **Smart Codec Detection**: Automatically detects unsupported codecs (like AV1 on older hardware) and suggests switching to the appropriate player engine.
-*   **Playlist Management**: Create and organize your video collections.
-*   **Native tvOS UI**: Designed with SwiftUI to feel right at home on the big screen.
-*   **Localization**: Fully localized in English and Simplified Chinese (简体中文).
+*   **双播放引擎**:
+    *   **系统播放器 (AVPlayer)**: 最适合标准格式 (H.264, HEVC/H.265)。利用硬件解码实现最高的电池效率和性能。
+    *   **KSPlayer (FFmpeg)**: 强大的备用引擎，支持几乎所有格式 (MKV, AVI, WMV, FLV) 以及系统本身不支持的编码 (如 AV1)。
+*   **Web 管理界面**: 内置 Web 服务器，允许你直接通过电脑浏览器管理播放列表和上传文件。
+    *   **播放队列管理**: 轻松添加、移除或重新排序播放队列中的项目。
+    *   **循环播放**: 全局设置，支持整个队列或单视频的无限循环播放。
+    *   **远程控制**: 直接从 Web 界面控制播放（播放、暂停、快进快退）。
+*   **智能编码检测**: 自动检测不支持的编码（如旧硬件上的 AV1），并建议切换到合适的播放引擎。
+*   **播放列表管理**: 创建并整理你的视频收藏。
+*   **原生 tvOS UI**: 使用 SwiftUI 设计，完美适配大屏幕操作体验。
+*   **多语言支持**: 完全支持简体中文和英文。
 
-## 🚀 Getting Started
+## 🚀 快速开始
 
-### Requirements
+### 环境要求
 
-*   Xcode 15.0 or later
-*   tvOS 16.0 or later
+*   Xcode 15.0 或更高版本
+*   tvOS 16.0 或更高版本
 *   Swift 5.9+
 
-### Installation
+### 安装步骤
 
-1.  **Clone the repository**:
+1.  **克隆仓库**:
     ```bash
     git clone https://github.com/yourusername/QvPlayer.git
     cd QvPlayer
     ```
 
-2.  **Open the project**:
-    Open `QvPlayer.xcodeproj` in Xcode.
+2.  **打开项目**:
+    在 Xcode 中打开 `QvPlayer.xcodeproj`。
 
-3.  **Resolve Dependencies**:
-    The project uses Swift Package Manager (SPM). Xcode should automatically fetch the required packages:
+3.  **解析依赖**:
+    项目使用 Swift Package Manager (SPM)。Xcode 应该会自动获取所需的包：
     *   [KSPlayer](https://github.com/kingslay/KSPlayer)
     *   [FFmpegKit](https://github.com/kingslay/FFmpegKit)
 
-4.  **Build and Run**:
-    Select your Apple TV simulator or connected device and press `Cmd + R`.
+4.  **构建并运行**:
+    选择你的 Apple TV 模拟器或连接的设备，然后按 `Cmd + R`。
 
-## 📖 Usage
+## 📖 使用指南
 
-### Importing Videos
+### 导入视频
 
-There are two ways to get videos into QvPlayer:
+有两种方法可以将视频导入 QvPlayer：
 
-1.  **Web Transfer (Recommended)**:
-    *   Open QvPlayer on your Apple TV.
-    *   Note the IP address displayed on the settings or home screen (e.g., `http://192.168.1.x:10001`).
-    *   Open that URL in a web browser on your computer.
-    *   Drag and drop video files to upload them directly to the Apple TV.
+1.  **Web 传输 (推荐)**:
+    *   在 Apple TV 上打开 QvPlayer。
+    *   记下设置或主屏幕上显示的 IP 地址 (例如 `http://192.168.1.x:10001`)。
+    *   在电脑浏览器中打开该 URL。
+    *   将视频文件拖放到网页中，即可直接上传到 Apple TV。
 
-2.  **iTunes File Sharing**:
-    *   Connect your Apple TV to your Mac (or use wireless debugging).
-    *   Open Finder (or iTunes on older macOS).
-    *   Navigate to the "Files" tab for the Apple TV.
-    *   Drag video files into the QvPlayer documents folder.
+2.  **iTunes 文件共享**:
+    *   将 Apple TV 连接到 Mac (或使用无线调试)。
+    *   打开 Finder (或旧版 macOS 上的 iTunes)。
+    *   导航到 Apple TV 的“文件”选项卡。
+    *   将视频文件拖入 QvPlayer 文档文件夹。
 
-### Switching Player Engines
+### Web 控制台
 
-If you encounter a video with sound but no image (black screen), it is likely using a codec not supported by the native player (e.g., AV1).
+Web 控制台（通过 IP 地址访问）提供高级功能：
+*   **队列管理**: 将视频添加到“播放队列 (Playlist Queue)”以进行连续播放。
+*   **循环模式**: 在侧边栏切换“循环播放 (Loop Playback)”以无限重复播放队列。
+*   **清空队列**: 使用垃圾桶图标一键清空整个播放队列。
+*   **远程控制**: 使用屏幕上的控件来播放、暂停或跳转 Apple TV 上正在运行的视频。
 
-1.  Go to **Settings** within the app.
-2.  Change **Player Engine** from `System` to `KSPlayer`.
-3.  Resume playback.
+### 切换播放引擎
 
-## � Screenshots
+如果你遇到视频**有声音但无画面**（黑屏）的情况，这通常是因为该视频使用了原生播放器不支持的编码（例如 AV1）。
 
-| Home | Player |
+1.  进入 App 内的 **设置 (Settings)**。
+2.  将 **播放引擎 (Player Engine)** 从 `System` 切换为 `KSPlayer`。
+3.  重新开始播放。
+
+## 📸 截图展示
+
+| 主页 | 播放器 |
 |:---:|:---:|
-| <img src="Screenshot/Simulator%20Screenshot3-home.png" width="400"/> | <img src="Screenshot/Simulator%20Screenshot1-player.png" width="400"/> |
+| <img src="Screenshot/player-home.png" width="400"/> | <img src="Screenshot/player.png" width="400"/> |
 
-| Settings | Web Control |
+| Web 控制台 | 添加源 |
 |:---:|:---:|
-| <img src="Screenshot/Simulator%20Screenshot-setting.png" width="400"/> | <img src="Screenshot/web_control.png" width="400"/> |
+| <img src="Screenshot/webconsole.png" width="400"/> | <img src="Screenshot/add_source.png" width="400"/> |
 
-## �🛠 Tech Stack
+## 🛠 技术栈
 
-*   **Language**: Swift
-*   **UI Framework**: SwiftUI
-*   **Architecture**: MVVM
-*   **Core Libraries**:
-    *   `AVKit` / `AVFoundation` (System Playback)
-    *   `KSPlayer` (FFmpeg-based Playback)
-    *   `GCDWebServer` (implied custom implementation in `Utilities/WebServer.swift`)
+*   **语言**: Swift
+*   **UI 框架**: SwiftUI
+*   **架构**: MVVM
+*   **核心库**:
+    *   `AVKit` / `AVFoundation` (系统播放)
+    *   `KSPlayer` (基于 FFmpeg 的播放)
+    *   `GCDWebServer` (在 `Utilities/WebServer.swift` 中实现的自定义 Web 服务)
 
-## 📝 License
+## 📝 许可证
 
-This project is for educational and personal use. Please refer to the licenses of third-party libraries (KSPlayer, FFmpegKit) for their respective usage terms.
+本项目仅供教育和个人使用。关于第三方库 (KSPlayer, FFmpegKit) 的使用条款，请参阅它们各自的许可证。
 
-## 💬 Community
+## 💬 社区
 
-Join our Telegram group for discussions and support:
+加入我们的 Telegram 群组进行讨论和支持：
 
 <img src="Screenshot/tg.jpg" width="200"/>
 

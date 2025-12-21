@@ -70,11 +70,11 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 
 | 主页 | 播放器 |
 |:---:|:---:|
-| <img src="Screenshot/Simulator%20Screenshot3-home.png" width="400"/> | <img src="Screenshot/Simulator%20Screenshot1-player.png" width="400"/> |
+| <img src="Screenshot/player-home.png" width="400"/> | <img src="Screenshot/player.png" width="400"/> |
 
-| 设置 | Web 控制台 |
+| Web 控制台 | 添加源 |
 |:---:|:---:|
-| <img src="Screenshot/Simulator%20Screenshot-setting.png" width="400"/> | <img src="Screenshot/web_control.png" width="400"/> |
+| <img src="Screenshot/webconsole.png" width="400"/> | <img src="Screenshot/add_source.png" width="400"/> |
 
 ## �🛠 技术栈
 
