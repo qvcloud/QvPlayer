@@ -98,6 +98,45 @@ class CacheManager {
         try? fileManager.removeItem(at: fileURL)
     }
     
+    func calculateCacheSize() -> Int64 {
+        guard let urls = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: [.fileSizeKey], options: []) else {
+            return 0
+        }
+        
+        var totalSize: Int64 = 0
+        for url in urls {
+            if let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey]),
+               let fileSize = resourceValues.fileSize {
+                totalSize += Int64(fileSize)
+            }
+        }
+        
+        // Also include thumbnails
+        if let thumbUrls = try? fileManager.contentsOfDirectory(at: thumbnailDirectory, includingPropertiesForKeys: [.fileSizeKey], options: []) {
+            for url in thumbUrls {
+                if let resourceValues = try? url.resourceValues(forKeys: [.fileSizeKey]),
+                   let fileSize = resourceValues.fileSize {
+                    totalSize += Int64(fileSize)
+                }
+            }
+        }
+        
+        return totalSize
+    }
+    
+    func formatSize(_ size: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useBytes, .useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: size)
+    }
+    
+    func performAutoClear(days: Int) {
+        guard days > 0 else { return }
+        let seconds = TimeInterval(days * 24 * 60 * 60)
+        cleanCache(olderThan: seconds)
+    }
+    
     // MARK: - Thumbnail Caching
     
     func getThumbnailURL(for remoteURL: URL) -> URL {

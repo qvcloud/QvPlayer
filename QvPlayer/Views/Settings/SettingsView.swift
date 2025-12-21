@@ -13,10 +13,12 @@ struct SettingsView: View {
     
     @AppStorage("selectedLanguage") private var selectedLanguage = "system"
     @AppStorage("showDebugOverlay") private var showDebugOverlay = false
+    @AppStorage("autoClearCacheDays") private var autoClearCacheDays = 0
     
     @State private var showRestartAlert = false
     @State private var showClearCacheAlert = false
     @State private var showResetAlert = false
+    @State private var cacheSizeString = "..."
     
     var body: some View {
         Form {
@@ -96,6 +98,22 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Storage")) {
+                HStack {
+                    Text("Cache Size")
+                    Spacer()
+                    Text(cacheSizeString)
+                        .foregroundStyle(.secondary)
+                }
+                
+                Picker("Auto Clear Cache", selection: $autoClearCacheDays) {
+                    Text("Never").tag(0)
+                    Text("1 Day").tag(1)
+                    Text("3 Days").tag(3)
+                    Text("7 Days").tag(7)
+                    Text("15 Days").tag(15)
+                    Text("30 Days").tag(30)
+                }
+                
                 Button(role: .destructive) {
                     showClearCacheAlert = true
                 } label: {
@@ -136,6 +154,7 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) { }
             Button("Clear", role: .destructive) {
                 CacheManager.shared.clearAllCache()
+                updateCacheSize()
             }
         } message: {
             Text("Are you sure you want to clear all cached videos and thumbnails? This action cannot be undone.")
@@ -144,9 +163,22 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
                 PlaylistManager.shared.clearAllData()
+                updateCacheSize()
             }
         } message: {
             Text("This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone.")
+        }
+        .onAppear {
+            updateCacheSize()
+        }
+    }
+    
+    private func updateCacheSize() {
+        Task.detached {
+            let size = CacheManager.shared.calculateCacheSize()
+            await MainActor.run {
+                cacheSizeString = CacheManager.shared.formatSize(size)
+            }
         }
     }
 }
