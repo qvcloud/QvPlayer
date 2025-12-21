@@ -423,7 +423,6 @@ struct WebAssets {
                 <div id="tab-media" class="tab-content">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h2>Library</h2>
                             <div class="filter-group" style="align-items: center;">
                                 <input type="text" id="searchInput" placeholder="Search..." oninput="handleSearch(this.value)" style="border: none; background: transparent; padding: 6px 12px; font-size: 13px; width: 150px; outline: none; margin-bottom: 0;">
                                 <div style="width: 1px; height: 20px; background: #d2d2d7; margin: 0 4px;"></div>
@@ -501,7 +500,7 @@ struct WebAssets {
                             <div id="fileName" style="margin-top: 12px; color: var(--secondary-text);"></div>
                         </div>
                         <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" style="margin-bottom: 16px;">
-                        <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled>Upload & Play</button>
+                        <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled>Upload</button>
                         <div id="uploadStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
                 </div>
