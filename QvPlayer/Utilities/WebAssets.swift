@@ -358,7 +358,14 @@ struct WebAssets {
                 <!-- Sidebar -->
                 <div class="sidebar">
                     <div class="sidebar-header">
-                        <h2 style="margin-bottom: 12px;">Playlist Queue</h2>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                            <h2 style="margin: 0;">Playlist Queue</h2>
+                            <button class="icon-btn danger" onclick="clearQueue()" title="Clear Queue" style="padding: 6px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </button>
+                        </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--secondary-text);">
                             <label style="display: flex; align-items: center; cursor: pointer; color: var(--text-color);">
                                 <input type="checkbox" id="loopMedia" onchange="toggleLoop(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Loop Playback
@@ -572,6 +579,26 @@ struct WebAssets {
                         method: 'PUT',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ isLooping: loopEnabled })
+                    });
+                }
+
+                function clearQueue() {
+                    if (!confirm('Are you sure you want to clear the playlist queue?')) return;
+                    
+                    fetch('/api/v1/queue', {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Queue will be updated by the next poll
+                        } else {
+                            alert('Failed to clear queue: ' + (data.message || 'Unknown error'));
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Error clearing queue:', err);
+                        alert('Error clearing queue');
                     });
                 }
                 

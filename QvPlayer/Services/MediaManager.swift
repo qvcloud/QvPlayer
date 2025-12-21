@@ -476,6 +476,7 @@ class MediaManager: ObservableObject {
     func clearPlayQueue() {
         DatabaseManager.shared.clearPlayQueue()
         notifyUpdate()
+        NotificationCenter.default.post(name: .queueDidFinish, object: nil)
     }
     
     func updateQueueItemStatus(id: UUID, status: PlayQueueStatus) {
