@@ -10,6 +10,8 @@ struct VideoGroup: Identifiable {
 class HomeViewModel: ObservableObject {
     @Published var videos: [Video] = []
     @Published var videoGroups: [VideoGroup] = []
+    @Published var localVideoGroups: [VideoGroup] = []
+    @Published var liveVideoGroups: [VideoGroup] = []
     @Published var isLoading: Bool = false
     
     init() {
@@ -42,7 +44,8 @@ class HomeViewModel: ObservableObject {
         DebugLogger.shared.warning("No local playlist found, using sample videos")
         // Fallback to sample videos if no local playlist
         self.videos = [
-            Video(title: "CGTN Live", url: URL(string: "https://0472.org/hls/cgtn.m3u8")!, group: "News", isLive: true, description: "CGTN Live Stream"),
+            Video(title: "CGTN Live", url: URL(string: "https://0472.org/hls/cgtn.m3u8")!, group: "Live Sources", isLive: true, description: "CGTN Live Stream"),
+            Video(title: "CCTV-13 News", url: URL(string: "http://ivi.bupt.edu.cn/hls/cctv13hd.m3u8")!, group: "Live Sources", isLive: true, description: "CCTV-13 News Live Stream"),
             Video(title: "Big Buck Bunny", url: URL(string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")!, group: "Movies", isLive: false, description: "Big Buck Bunny is a short computer-animated comedy film.")
         ]
         self.groupVideos(self.videos)
@@ -50,16 +53,34 @@ class HomeViewModel: ObservableObject {
     
     private func groupVideos(_ videos: [Video]) {
         DebugLogger.shared.info("Grouping \(videos.count) videos")
-        let groupedDictionary = Dictionary(grouping: videos) { $0.group ?? "Ungrouped" }
         
-        let sortedKeys = groupedDictionary.keys.sorted {
-            if $0 == "Ungrouped" { return false } // Ungrouped at the end
+        // Split into local and live
+        let localVideos = videos.filter { !$0.isLive }
+        let liveVideos = videos.filter { $0.isLive }
+        
+        // Group Local
+        let localGrouped = Dictionary(grouping: localVideos) { $0.group ?? "Ungrouped" }
+        let localSortedKeys = localGrouped.keys.sorted {
+            if $0 == "Ungrouped" { return false }
             if $1 == "Ungrouped" { return true }
             return $0 < $1
         }
-        
-        self.videoGroups = sortedKeys.map { key in
-            VideoGroup(name: key, videos: groupedDictionary[key] ?? [])
+        self.localVideoGroups = localSortedKeys.map { key in
+            VideoGroup(name: key, videos: localGrouped[key] ?? [])
         }
+        
+        // Group Live
+        let liveGrouped = Dictionary(grouping: liveVideos) { $0.group ?? "Ungrouped" }
+        let liveSortedKeys = liveGrouped.keys.sorted {
+            if $0 == "Ungrouped" { return false }
+            if $1 == "Ungrouped" { return true }
+            return $0 < $1
+        }
+        self.liveVideoGroups = liveSortedKeys.map { key in
+            VideoGroup(name: key, videos: liveGrouped[key] ?? [])
+        }
+        
+        // Keep original for backward compatibility if needed, or just union
+        self.videoGroups = self.localVideoGroups + self.liveVideoGroups
     }
 }

@@ -89,6 +89,7 @@ class CacheManager {
     func clearAllCache() {
         DebugLogger.shared.warning("Clearing all cache")
         try? fileManager.removeItem(at: cacheDirectory)
+        try? fileManager.removeItem(at: thumbnailDirectory)
     }
     
     func removeCachedVideo(url: URL) {

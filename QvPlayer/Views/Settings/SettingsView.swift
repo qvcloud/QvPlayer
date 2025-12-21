@@ -13,6 +13,8 @@ struct SettingsView: View {
     
     @AppStorage("selectedLanguage") private var selectedLanguage = "system"
     @State private var showRestartAlert = false
+    @State private var showClearCacheAlert = false
+    @State private var showResetAlert = false
     
     var body: some View {
         Form {
@@ -91,6 +93,20 @@ struct SettingsView: View {
                 }
             }
             
+            Section(header: Text("Storage")) {
+                Button(role: .destructive) {
+                    showClearCacheAlert = true
+                } label: {
+                    Text("Clear All Cache")
+                }
+                
+                Button(role: .destructive) {
+                    showResetAlert = true
+                } label: {
+                    Text("Reset App Data")
+                }
+            }
+            
             Section(header: Text("Debug")) {
                 Toggle("Show Debug Overlay", isOn: DebugLogger.shared.$showDebugOverlay)
             }
@@ -113,6 +129,22 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Please restart the app to apply language changes.")
+        }
+        .alert("Clear Cache", isPresented: $showClearCacheAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear", role: .destructive) {
+                CacheManager.shared.clearAllCache()
+            }
+        } message: {
+            Text("Are you sure you want to clear all cached videos and thumbnails? This action cannot be undone.")
+        }
+        .alert("Reset App Data", isPresented: $showResetAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                PlaylistManager.shared.clearAllData()
+            }
+        } message: {
+            Text("This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone.")
         }
     }
 }

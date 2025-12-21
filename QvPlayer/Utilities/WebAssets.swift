@@ -200,8 +200,13 @@ struct WebAssets {
                     font-size: 11px;
                     font-weight: 600;
                 }
+                                .badge.live { background: #34c759; color: white; }
+                .badge.local { background: #007aff; color: white; }
                 
-                .action-group {
+                .filter-group { display: flex; background: #f2f2f7; padding: 2px; border-radius: 8px; margin-right: 12px; }
+                .filter-btn { padding: 4px 12px; border: none; background: none; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text-color); }
+                .filter-btn.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-weight: 500; }
+                                .action-group {
                     display: flex;
                     gap: 8px;
                 }
@@ -310,13 +315,17 @@ struct WebAssets {
                     <button class="tab-btn active" onclick="switchTab('playlist')">Playlist</button>
                     <button class="tab-btn" onclick="switchTab('add')">Add Stream</button>
                     <button class="tab-btn" onclick="switchTab('upload')">Upload</button>
-                    <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
                 </div>
                 
                 <div id="tab-playlist" class="tab-content">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2>Library</h2>
+                            <div class="filter-group">
+                                <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
+                                <button class="filter-btn" id="filter-local" onclick="setFilter('local')">Local</button>
+                                <button class="filter-btn" id="filter-live" onclick="setFilter('live')">Live</button>
+                            </div>
                             <div style="display: flex; gap: 8px;">
                                 <div id="batchToolbar" style="display: none; gap: 8px;">
                                     <button class="btn secondary" onclick="openBatchMoveModal()">Move Selected</button>
@@ -354,25 +363,26 @@ struct WebAssets {
                 
                 <div id="tab-upload" class="tab-content" style="display: none;">
                     <div class="card">
+                        <h2>Add Remote Source</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote M3U/M3U8 playlist.</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <input type="text" id="remoteUrl" placeholder="https://example.com/playlist.m3u" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="remoteName" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                        </div>
+                        <button onclick="addRemoteSource()" class="btn" id="addRemoteBtn">Add Source</button>
+                        <div id="remoteStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
+                    </div>
+
+                    <div class="card">
                         <h2>Upload Local File</h2>
                         <div style="border: 2px dashed #d2d2d7; border-radius: 12px; padding: 40px; text-align: center; margin-bottom: 16px;">
                             <input type="file" id="fileInput" style="display: none" onchange="handleFileSelect()">
                             <button class="btn secondary" onclick="document.getElementById('fileInput').click()">Select Video File</button>
                             <div id="fileName" style="margin-top: 12px; color: var(--secondary-text);"></div>
                         </div>
+                        <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" style="margin-bottom: 16px;">
                         <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled>Upload & Play</button>
                         <div id="uploadStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
-                    </div>
-                </div>
-                
-                <div id="tab-settings" class="tab-content" style="display: none;">
-                    <div class="card">
-                        <h2>Replace Playlist</h2>
-                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Paste M3U content to overwrite entire library.</p>
-                        <form id="replaceForm" onsubmit="handleReplacePlaylist(event)">
-                            <textarea name="content" style="height: 150px;" placeholder="#EXTM3U..."></textarea>
-                            <button type="submit" class="btn danger">Replace All</button>
-                        </form>
                     </div>
                 </div>
 
@@ -453,28 +463,6 @@ struct WebAssets {
                     });
                 }
                 
-                function handleReplacePlaylist(e) {
-                    e.preventDefault();
-                    if(!confirm('This will delete all existing channels. Continue?')) return;
-                    
-                    const formData = new FormData(e.target);
-                    const content = formData.get('content');
-                    
-                    fetch('/api/v1/playlist', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ content })
-                    })
-                    .then(res => res.json())
-                    .then(res => {
-                        if(res.success) {
-                            e.target.reset();
-                            switchTab('playlist');
-                            loadPlaylist();
-                        }
-                    });
-                }
-                
                 function handleFileSelect() {
                     const file = document.getElementById('fileInput').files[0];
                     if (file) {
@@ -487,8 +475,13 @@ struct WebAssets {
                     const file = document.getElementById('fileInput').files[0];
                     if (!file) return;
                     
+                    const group = document.getElementById('uploadGroup').value.trim();
+                    
                     const formData = new FormData();
                     formData.append('file', file);
+                    if (group) {
+                        formData.append('group', group);
+                    }
                     
                     const statusDiv = document.getElementById('uploadStatus');
                     const btn = document.getElementById('uploadBtn');
@@ -520,6 +513,52 @@ struct WebAssets {
                         statusDiv.textContent = 'Error: ' + err;
                     });
                 }
+
+                function addRemoteSource() {
+                    const urlInput = document.getElementById('remoteUrl');
+                    const nameInput = document.getElementById('remoteName');
+                    const url = urlInput.value.trim();
+                    const name = nameInput.value.trim();
+                    
+                    if (!url) {
+                        alert('Please enter a URL');
+                        return;
+                    }
+                    
+                    const statusDiv = document.getElementById('remoteStatus');
+                    const btn = document.getElementById('addRemoteBtn');
+                    
+                    statusDiv.textContent = 'Adding source...';
+                    btn.disabled = true;
+                    
+                    fetch('/api/v1/upload/remote', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            name: name || null
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        btn.disabled = false;
+                        if (data.success) {
+                            statusDiv.textContent = 'Success!';
+                            urlInput.value = '';
+                            nameInput.value = '';
+                            switchTab('playlist');
+                            loadPlaylist();
+                        } else {
+                            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
+                        }
+                    })
+                    .catch(err => {
+                        btn.disabled = false;
+                        statusDiv.textContent = 'Error: ' + err;
+                    });
+                }
                 
                 function truncateMiddle(text, maxLength) {
                     if (!text) return '';
@@ -528,46 +567,77 @@ struct WebAssets {
                     return text.substring(0, partLength) + '...' + text.substring(text.length - partLength);
                 }
 
+                let currentFilter = 'all';
+
+                function setFilter(filter) {
+                    currentFilter = filter;
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    document.getElementById('filter-' + filter).classList.add('active');
+                    document.getElementById('selectAll').checked = false;
+                    renderPlaylist();
+                }
+
                 function loadPlaylist() {
                     fetch('/api/v1/playlist')
                         .then(res => res.json())
                         .then(data => {
+                            if (!Array.isArray(data)) {
+                                console.error('Playlist data is not an array:', data);
+                                return;
+                            }
                             currentVideos = data;
                             selectedIndices.clear();
                             updateBatchToolbar();
                             document.getElementById('selectAll').checked = false;
+                            renderPlaylist();
+                        })
+                        .catch(err => console.error('Failed to load playlist:', err));
+                }
+
+                function renderPlaylist() {
+                    const list = document.getElementById('playlist');
+                    list.innerHTML = '';
+                    
+                    currentVideos.forEach((video, index) => {
+                        // Robust check for isLive
+                        const isLive = video.isLive === true;
+                        
+                        if (currentFilter === 'local' && isLive) return;
+                        if (currentFilter === 'live' && !isLive) return;
+                        
+                        const isSelected = selectedIndices.has(index);
+                        const typeBadge = isLive 
+                            ? '<span class="badge live">LIVE</span>' 
+                            : '<span class="badge local">LOCAL</span>';
                             
-                            const list = document.getElementById('playlist');
-                            list.innerHTML = '';
-                            data.forEach((video, index) => {
-                                const li = document.createElement('li');
-                                li.className = 'video-item';
-                                li.innerHTML = `
-                                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                                        <input type="checkbox" class="video-checkbox" onchange="toggleSelection(${index}, this)">
-                                        <div class="video-info">
-                                            <div class="video-title">${escapeHtml(video.title)}</div>
-                                            <div class="video-meta">
-                                                <span class="badge">${escapeHtml(video.group || 'Default')}</span>
-                                                <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
-                                            </div>
-                                        </div>
+                        const li = document.createElement('li');
+                        li.className = 'video-item';
+                        li.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                <input type="checkbox" class="video-checkbox" data-index="${index}" onchange="toggleSelection(${index}, this)" ${isSelected ? 'checked' : ''}>
+                                <div class="video-info">
+                                    <div class="video-title">${escapeHtml(video.title)}</div>
+                                    <div class="video-meta">
+                                        ${typeBadge}
+                                        <span class="badge">${escapeHtml(video.group || 'Default')}</span>
+                                        <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
                                     </div>
-                                    <div class="action-group">
-                                        <button class="icon-btn" onclick="playVideo(${index})" title="Play">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                                        </button>
-                                        <button class="icon-btn" onclick="openEdit(${index})" title="Edit">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                                        </button>
-                                        <button class="icon-btn danger" onclick="deleteVideo(${index})" title="Delete">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                        </button>
-                                    </div>
-                                `;
-                                list.appendChild(li);
-                            });
-                        });
+                                </div>
+                            </div>
+                            <div class="action-group">
+                                <button class="icon-btn" onclick="playVideo(${index})" title="Play">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                <button class="icon-btn" onclick="openEdit(${index})" title="Edit">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                <button class="icon-btn danger" onclick="deleteVideo(${index})" title="Delete">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </button>
+                            </div>
+                        `;
+                        list.appendChild(li);
+                    });
                 }
                 
                 function toggleSelection(index, checkbox) {
@@ -581,8 +651,9 @@ struct WebAssets {
                 
                 function toggleSelectAll(checkbox) {
                     const checkboxes = document.querySelectorAll('.video-checkbox');
-                    checkboxes.forEach((cb, index) => {
+                    checkboxes.forEach(cb => {
                         cb.checked = checkbox.checked;
+                        const index = parseInt(cb.getAttribute('data-index'));
                         if (checkbox.checked) {
                             selectedIndices.add(index);
                         } else {

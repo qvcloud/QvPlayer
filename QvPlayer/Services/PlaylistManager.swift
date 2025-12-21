@@ -119,6 +119,37 @@ class PlaylistManager: ObservableObject {
         try savePlaylist(content: newContent)
     }
     
+    func appendPlaylist(content: String, customGroupName: String? = nil) throws {
+        DebugLogger.shared.info("Appending playlist content")
+        var videos = getPlaylistVideos()
+        let newVideos = PlaylistService.shared.parseM3U(content: content)
+        
+        // Update group for new videos if needed, or keep as is
+        // For imported playlists, we usually want to keep their groups or default to "Imported"
+        // But parseM3U already handles group-title.
+        
+        // We should ensure isLive is set correctly for these
+        let processedVideos = newVideos.map { video -> Video in
+            var v = video
+            // If it's http/https, it's likely live or remote
+            if v.url.scheme?.hasPrefix("http") == true {
+                v.isLive = true
+            }
+            
+            if let customGroup = customGroupName {
+                v.group = customGroup
+            } else if v.group == nil || v.group?.isEmpty == true {
+                v.group = "Imported"
+            }
+            return v
+        }
+        
+        videos.append(contentsOf: processedVideos)
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try savePlaylist(content: newContent)
+    }
+    
     func deleteVideo(at index: Int) throws {
         var videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
@@ -168,6 +199,61 @@ class PlaylistManager: ObservableObject {
         try savePlaylist(content: newContent)
     }
     
+    func deleteVideo(_ video: Video) {
+        var videos = getPlaylistVideos()
+        // Match by ID or URL if ID fails (for backward compatibility or if IDs are regenerated)
+        if let index = videos.firstIndex(where: { $0.id == video.id || $0.url == video.url }) {
+            DebugLogger.shared.info("Deleting video: \(video.title)")
+            
+            // Clear cache and thumbnail
+            CacheManager.shared.removeCachedVideo(url: video.url)
+            CacheManager.shared.removeThumbnail(for: video.url)
+            
+            videos.remove(at: index)
+            
+            let newContent = PlaylistService.shared.generateM3U(from: videos)
+            try? savePlaylist(content: newContent)
+        }
+    }
+    
+    func deleteGroup(_ groupName: String) {
+        var videos = getPlaylistVideos()
+        
+        // Find videos in the group
+        let videosToDelete = videos.filter { $0.group == groupName }
+        
+        guard !videosToDelete.isEmpty else { return }
+        
+        DebugLogger.shared.info("Deleting group: \(groupName) with \(videosToDelete.count) videos")
+        
+        for video in videosToDelete {
+             // Clear cache and thumbnail
+             CacheManager.shared.removeCachedVideo(url: video.url)
+             CacheManager.shared.removeThumbnail(for: video.url)
+        }
+        
+        // Remove videos from the list
+        videos.removeAll { $0.group == groupName }
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try? savePlaylist(content: newContent)
+    }
+    
+    func clearAllData() {
+        DebugLogger.shared.warning("Clearing all app data (playlist + cache)")
+        
+        // 1. Clear Cache
+        CacheManager.shared.clearAllCache()
+        
+        // 2. Delete Playlist Files (from all possible locations)
+        try? FileManager.default.removeItem(at: documentsURL)
+        try? FileManager.default.removeItem(at: appSupportURL)
+        try? FileManager.default.removeItem(at: cachesURL)
+        
+        // 3. Notify UI
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+    }
+
     func deleteVideos(at indices: [Int]) throws {
         var videos = getPlaylistVideos()
         let sortedIndices = indices.sorted(by: >)

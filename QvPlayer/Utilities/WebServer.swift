@@ -259,8 +259,6 @@ class WebServer {
             handleDeleteVideo(client: client, queryItems: queryItems)
         } else if method == "PUT" && path == "/api/v1/videos" {
             handleUpdateVideo(client: client, queryItems: queryItems, body: bodyString)
-        } else if method == "POST" && path == "/api/v1/playlist" {
-            handleReplacePlaylist(client: client, body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/videos/batch" {
             handleBatchDeleteVideo(client: client, body: bodyString)
         } else if method == "PUT" && path == "/api/v1/videos/batch/group" {
@@ -273,6 +271,8 @@ class WebServer {
         // MARK: - Upload Endpoint
         else if method == "POST" && path == "/api/v1/upload" {
             handleUpload(client: client, headers: headersString, body: bodyData)
+        } else if method == "POST" && path == "/api/v1/upload/remote" {
+            handleRemoteUpload(client: client, body: bodyString)
         }
         // MARK: - Legacy / Form Endpoints
         else if method == "POST" && path == "/api/v1/delete" {
@@ -341,12 +341,23 @@ class WebServer {
     
     private func handleGetVideos(client: Client) {
         let videos = PlaylistManager.shared.getPlaylistVideos()
-        let jsonItems = videos.map { ["title": $0.title, "url": $0.url.absoluteString, "group": $0.group ?? ""] }
-        if let data = try? JSONSerialization.data(withJSONObject: jsonItems),
+        DebugLogger.shared.info("API: Get Videos - Found \(videos.count) items")
+        
+        let jsonItems = videos.map { video -> [String: Any] in
+            return [
+                "title": video.title,
+                "url": video.url.absoluteString,
+                "group": video.group ?? "",
+                "isLive": video.isLive
+            ]
+        }
+        
+        if let data = try? JSONSerialization.data(withJSONObject: jsonItems, options: .prettyPrinted),
            let jsonString = String(data: data, encoding: .utf8) {
             sendResponse(client: client, contentType: "application/json", body: jsonString)
         } else {
-            sendResponse(client: client, status: "500 Internal Server Error", body: "{}")
+            DebugLogger.shared.error("API: Failed to serialize videos")
+            sendResponse(client: client, status: "500 Internal Server Error", body: "[]")
         }
     }
     
@@ -416,23 +427,6 @@ class WebServer {
         }
     }
     
-    private func handleReplacePlaylist(client: Client, body: String) {
-        // Check if body is JSON or raw M3U
-        do {
-            if let data = body.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-               let content = json["content"] {
-                try PlaylistManager.shared.savePlaylist(content: content)
-            } else {
-                // Assume raw text
-                try PlaylistManager.shared.savePlaylist(content: body)
-            }
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to replace playlist: \(error.localizedDescription)\"}")
-        }
-    }
-    
     private func handleControl(client: Client, path: String, queryItems: [URLQueryItem]) {
         let action = path.replacingOccurrences(of: "/api/v1/control/", with: "")
         
@@ -495,81 +489,153 @@ class WebServer {
             return
         }
         
-        print("📂 [Upload] Boundary: \(boundary)")
-        
-        // 2. Find File Data
+        // 2. Parse Multipart Data
         let boundaryData = ("--" + boundary).data(using: .utf8)!
+        var parts: [Data] = []
         
-        // Find start of first part
-        guard let firstPartRange = body.range(of: boundaryData) else {
-            print("❌ [Upload] First boundary not found in body")
-            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Boundary not found\"}")
-            return
+        var currentRange = body.startIndex..<body.endIndex
+        
+        // Find first boundary
+        guard let firstBoundaryRange = body.range(of: boundaryData, options: [], in: currentRange) else {
+             sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Boundary not found\"}")
+             return
         }
         
-        let afterFirstBoundary = body.subdata(in: firstPartRange.upperBound..<body.count)
+        currentRange = firstBoundaryRange.upperBound..<body.endIndex
         
-        // Find headers end (\r\n\r\n)
-        let separator = "\r\n\r\n".data(using: .utf8)!
-        guard let headersEndRange = afterFirstBoundary.range(of: separator) else {
-            print("❌ [Upload] Headers end not found")
-            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Headers end not found\"}")
-            return
-        }
-        
-        let partHeadersData = afterFirstBoundary.subdata(in: 0..<headersEndRange.lowerBound)
-        let partHeadersString = String(data: partHeadersData, encoding: .utf8) ?? ""
-        print("📂 [Upload] Part Headers: \(partHeadersString)")
-        
-        // Extract Filename
-        var filename = "uploaded_file.mp4"
-        if let filenameRange = partHeadersString.range(of: "filename=\"") {
-            let afterFilename = partHeadersString[filenameRange.upperBound...]
-            if let endQuote = afterFilename.firstIndex(of: "\"") {
-                filename = String(afterFilename[..<endQuote])
+        while true {
+            guard let nextBoundaryRange = body.range(of: boundaryData, options: [], in: currentRange) else {
+                break
             }
+            
+            let partData = body.subdata(in: currentRange.lowerBound..<nextBoundaryRange.lowerBound)
+            parts.append(partData)
+            
+            currentRange = nextBoundaryRange.upperBound..<body.endIndex
+        }
+        
+        var uploadedFileData: Data?
+        var uploadedFilename: String?
+        var uploadedGroup: String?
+        
+        let separator = "\r\n\r\n".data(using: .utf8)!
+        
+        for part in parts {
+            // Find headers end
+            guard let headersEndRange = part.range(of: separator) else { continue }
+            
+            let headersData = part.subdata(in: 0..<headersEndRange.lowerBound)
+            let headersString = String(data: headersData, encoding: .utf8) ?? ""
+            
+            // Extract content
+            var contentData = part.subdata(in: headersEndRange.upperBound..<part.count)
+            
+            // Strip trailing CRLF
+            if contentData.count >= 2 {
+                let suffix = contentData.subdata(in: contentData.count-2..<contentData.count)
+                if suffix == "\r\n".data(using: .utf8)! {
+                    contentData = contentData.subdata(in: 0..<contentData.count-2)
+                }
+            }
+            
+            if headersString.contains("filename=\"") {
+                // It's a file
+                if let filenameRange = headersString.range(of: "filename=\"") {
+                    let afterFilename = headersString[filenameRange.upperBound...]
+                    if let endQuote = afterFilename.firstIndex(of: "\"") {
+                        uploadedFilename = String(afterFilename[..<endQuote])
+                    }
+                }
+                uploadedFileData = contentData
+            } else if headersString.contains("name=\"group\"") {
+                // It's the group field
+                uploadedGroup = String(data: contentData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        guard let fileData = uploadedFileData, var filename = uploadedFilename else {
+            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"No file uploaded\"}")
+            return
         }
         
         // Sanitize filename
         filename = filename.replacingOccurrences(of: "/", with: "_")
                            .replacingOccurrences(of: "\\", with: "_")
         
-        // Extract Content
-        let contentStart = headersEndRange.upperBound
-        let contentData = afterFirstBoundary.subdata(in: contentStart..<afterFirstBoundary.count)
-        print("📂 [Upload] Content Data Size: \(contentData.count)")
-        
-        // Find end boundary
-        guard let endBoundaryRange = contentData.range(of: boundaryData) else {
-             print("❌ [Upload] End boundary not found. Content tail: \(String(data: contentData.suffix(50), encoding: .ascii) ?? "nil")")
-             sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"End boundary not found\"}")
-             return
-        }
-        
-        var fileDataEnd = endBoundaryRange.lowerBound
-        // Strip trailing \r\n if present
-        if fileDataEnd >= 2 {
-            let potentialCRLF = contentData.subdata(in: fileDataEnd-2..<fileDataEnd)
-            if potentialCRLF == "\r\n".data(using: .utf8)! {
-                fileDataEnd -= 2
+        // 3. Process File
+        if filename.lowercased().hasSuffix(".m3u") || filename.lowercased().hasSuffix(".m3u8") {
+            // Handle Playlist Import
+            if let content = String(data: fileData, encoding: .utf8) {
+                do {
+                    // Use uploaded group name if provided, otherwise use filename
+                    let groupName = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : (filename as NSString).deletingPathExtension
+                    try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
+                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Playlist imported successfully\"}")
+                } catch {
+                    sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import playlist: \(error.localizedDescription)\"}")
+                }
+            } else {
+                sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Invalid playlist encoding\"}")
             }
+            return
         }
         
-        let fileData = contentData.subdata(in: 0..<fileDataEnd)
-        
-        // 3. Save File to Cache
+        // 4. Save File to Cache (for non-playlist files)
         do {
             let fileURL = try CacheManager.shared.saveUploadedFile(data: fileData, filename: filename)
             
-            // 4. Add to Playlist
-            // Use a custom scheme to persist local file references across app launches
+            // 5. Add to Playlist
             let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
             let localURLString = "localcache://\(encodedFilename)"
-            try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: "Local Uploads")
+            
+            let targetGroup = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : "Local Uploads"
+            
+            try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: targetGroup)
             
             sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"path\": \"\(fileURL.lastPathComponent)\"}")
         } catch {
             sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to save file or playlist: \(error.localizedDescription)\"}")
+        }
+    }
+    
+    private func handleRemoteUpload(client: Client, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let urlString = json["url"] as? String,
+              let url = URL(string: urlString) else {
+            sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Invalid URL\"}")
+            return
+        }
+        
+        let name = json["name"] as? String
+        
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                guard let content = String(data: data, encoding: .utf8) else {
+                    throw NSError(domain: "WebServer", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid content encoding"])
+                }
+                
+                let groupName = name ?? url.lastPathComponent
+                
+                // Dispatch to main queue to ensure thread safety with PlaylistManager if needed, 
+                // though PlaylistManager isn't strictly main-actor bound, it's good practice for shared state.
+                // However, since we are in a Task, we can just call it. 
+                // But we need to be careful about sendResponse which uses the socket.
+                
+                DispatchQueue.main.async {
+                    do {
+                        try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
+                        self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
+                    } catch {
+                        self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import remote playlist: \(error.localizedDescription)\"}")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to download remote playlist: \(error.localizedDescription)\"}")
+                }
+            }
         }
     }
     
