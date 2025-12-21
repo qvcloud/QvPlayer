@@ -84,18 +84,36 @@ class WebAPIController {
         }
         
         guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let title = json["title"],
-              let url = json["url"] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let title = json["title"] as? String,
+              let url = json["url"] as? String else {
             return (false, "Invalid JSON or missing fields")
         }
         
-        let group = json["group"]
+        let group = json["group"] as? String
+        let isLive = json["isLive"] as? Bool
+        
         do {
-            try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
+            try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group, isLive: isLive)
             return (true, nil)
         } catch {
             return (false, "Failed to update video: \(error.localizedDescription)")
+        }
+    }
+    
+    func handleBatchUpdateGroup(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let indices = json["indices"] as? [Int],
+              let newGroup = json["group"] as? String else {
+            return (false, "Invalid JSON or missing fields")
+        }
+        
+        do {
+            try PlaylistManager.shared.batchUpdateGroup(indices: indices, newGroup: newGroup)
+            return (true, nil)
+        } catch {
+            return (false, "Failed to batch update group: \(error.localizedDescription)")
         }
     }
     
@@ -111,22 +129,6 @@ class WebAPIController {
             return (true, nil)
         } catch {
             return (false, "Failed to delete videos: \(error.localizedDescription)")
-        }
-    }
-    
-    func handleBatchUpdateGroup(body: String) -> (success: Bool, message: String?) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let indices = json["indices"] as? [Int],
-              let group = json["group"] as? String else {
-            return (false, "Invalid JSON or missing fields")
-        }
-        
-        do {
-            try PlaylistManager.shared.updateVideosGroup(at: indices, newGroup: group)
-            return (true, nil)
-        } catch {
-            return (false, "Failed to update videos: \(error.localizedDescription)")
         }
     }
     

@@ -152,6 +152,12 @@ class PlayerViewModel: ObservableObject {
         
         playerItem.externalMetadata = metadata
         
+        // Add Playback Finished Observer
+        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: playerItem, queue: .main) { [weak self] _ in
+            print("🏁 [Player] Playback finished")
+            NotificationCenter.default.post(name: .playerDidFinishPlaying, object: nil)
+        }
+        
         // Add Error Log Observer
         NotificationCenter.default.addObserver(forName: .AVPlayerItemNewErrorLogEntry, object: playerItem, queue: .main) { notification in
             if let item = notification.object as? AVPlayerItem, let log = item.errorLog()?.events.last {

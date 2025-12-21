@@ -209,7 +209,25 @@ class PlaylistManager: ObservableObject {
         notifyUpdate()
     }
     
-    func updateVideo(at index: Int, title: String, url: String, group: String? = nil) throws {
+    func batchUpdateGroup(indices: [Int], newGroup: String) throws {
+        let videos = getPlaylistVideos()
+        let validIndices = indices.filter { $0 >= 0 && $0 < videos.count }
+        
+        guard !validIndices.isEmpty else {
+            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "No valid indices provided"])
+            throw error
+        }
+        
+        for index in validIndices {
+            var video = videos[index]
+            video.group = newGroup
+            DatabaseManager.shared.updateVideo(video)
+        }
+        
+        notifyUpdate()
+    }
+    
+    func updateVideo(at index: Int, title: String, url: String, group: String? = nil, isLive: Bool? = nil) throws {
         let videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
             let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for update: \(index)"])
@@ -227,7 +245,7 @@ class PlaylistManager: ObservableObject {
         var video = videos[index]
         
         let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
-        let isLive = !isLocal
+        let finalIsLive = isLive ?? !isLocal
         
         var finalGroup = group
         if finalGroup == nil || finalGroup?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
@@ -237,7 +255,7 @@ class PlaylistManager: ObservableObject {
         video.title = title
         video.url = validURL
         video.group = finalGroup
-        video.isLive = isLive
+        video.isLive = finalIsLive
         
         DatabaseManager.shared.updateVideo(video)
         notifyUpdate()

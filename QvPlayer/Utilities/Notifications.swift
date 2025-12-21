@@ -7,4 +7,5 @@ extension Notification.Name {
     static let commandSeek = Notification.Name("commandSeek") // UserInfo: ["seconds": Double]
     static let commandPlayVideo = Notification.Name("commandPlayVideo") // UserInfo: ["index": Int]
     static let playerStatusDidUpdate = Notification.Name("playerStatusDidUpdate") // UserInfo: ["status": [String: Any]]
+    static let playerDidFinishPlaying = Notification.Name("playerDidFinishPlaying")
 }

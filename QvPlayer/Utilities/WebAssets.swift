@@ -463,7 +463,13 @@ struct WebAssets {
                     <h2>Edit Stream</h2>
                     <input type="hidden" id="editIndex">
                     <input type="text" id="editTitle" placeholder="Name">
-                    <input type="text" id="editGroup" placeholder="Group">
+                    <select id="editGroup" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 16px; margin-bottom: 12px; box-sizing: border-box; background: white;">
+                        <!-- Options loaded via JS -->
+                    </select>
+                    <select id="editType" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 16px; margin-bottom: 12px; box-sizing: border-box; background: white;">
+                        <option value="live">Live Stream</option>
+                        <option value="local">Local / Remote File</option>
+                    </select>
                     <input type="text" id="editUrl" placeholder="URL" disabled>
                     <div class="modal-actions">
                         <button onclick="closeModal()" class="btn secondary">Cancel</button>
@@ -476,7 +482,9 @@ struct WebAssets {
             <div id="batchMoveModal" class="modal">
                 <div class="modal-content">
                     <h2>Move Selected to Group</h2>
-                    <input type="text" id="batchGroupInput" placeholder="New Group Name">
+                    <select id="batchGroupInput" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 16px; margin-bottom: 12px; box-sizing: border-box; background: white;">
+                        <!-- Options loaded via JS -->
+                    </select>
                     <div class="modal-actions">
                         <button onclick="closeBatchMoveModal()" class="btn secondary">Cancel</button>
                         <button onclick="batchMove()" class="btn">Move</button>
@@ -774,9 +782,41 @@ struct WebAssets {
                                 <div class="video-title">${escapeHtml(group)}</div>
                                 <div class="video-meta">${count} videos</div>
                             </div>
-                            <button class="btn danger" style="width: auto; padding: 8px 16px;" onclick="deleteGroup('${escapeHtml(group)}')">Delete Group</button>
+                            <div class="action-group">
+                                <button class="btn secondary" style="width: auto; padding: 8px 16px;" onclick="renameGroup('${escapeHtml(group)}')">Rename</button>
+                                <button class="btn danger" style="width: auto; padding: 8px 16px;" onclick="deleteGroup('${escapeHtml(group)}')">Delete</button>
+                            </div>
                         `;
                         list.appendChild(li);
+                    });
+                }
+                
+                function renameGroup(oldGroup) {
+                    const newGroup = prompt("Enter new name for group '" + oldGroup + "':", oldGroup);
+                    if (!newGroup || newGroup === oldGroup) return;
+                    
+                    const indices = [];
+                    currentVideos.forEach((v, i) => {
+                        if ((v.group || 'Default') === oldGroup) {
+                            indices.push(i);
+                        }
+                    });
+                    
+                    fetch('/api/v1/videos/batch/group', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ 
+                            indices: indices,
+                            group: newGroup
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(res => {
+                        if (res.success) {
+                            loadPlaylist();
+                        } else {
+                            alert('Error: ' + (res.error || 'Unknown'));
+                        }
                     });
                 }
                 
@@ -1059,6 +1099,7 @@ struct WebAssets {
                 }
                 
                 function openBatchMoveModal() {
+                    populateGroupSelect('batchGroupInput');
                     document.getElementById('batchMoveModal').classList.add('active');
                 }
                 
@@ -1102,9 +1143,32 @@ struct WebAssets {
                     const video = currentVideos[index];
                     document.getElementById('editIndex').value = index;
                     document.getElementById('editTitle').value = video.title;
-                    document.getElementById('editGroup').value = video.group || '';
                     document.getElementById('editUrl').value = video.url;
+                    document.getElementById('editType').value = video.isLive ? 'live' : 'local';
+                    
+                    populateGroupSelect('editGroup', video.group);
+                    
                     document.getElementById('editModal').classList.add('active');
+                }
+                
+                function populateGroupSelect(elementId, selectedGroup) {
+                    const select = document.getElementById(elementId);
+                    select.innerHTML = '<option value="">Default</option>';
+                    
+                    const groups = new Set();
+                    currentVideos.forEach(v => {
+                        if (v.group) groups.add(v.group);
+                    });
+                    
+                    Array.from(groups).sort().forEach(group => {
+                        const option = document.createElement('option');
+                        option.value = group;
+                        option.textContent = group;
+                        if (group === selectedGroup) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
                 }
                 
                 function closeModal() {
@@ -1116,7 +1180,8 @@ struct WebAssets {
                     const data = {
                         title: document.getElementById('editTitle').value,
                         group: document.getElementById('editGroup').value,
-                        url: document.getElementById('editUrl').value
+                        url: document.getElementById('editUrl').value,
+                        isLive: document.getElementById('editType').value === 'live'
                     };
                     
                     fetch('/api/v1/videos?index=' + index, {

@@ -87,6 +87,10 @@ struct PlayerView: View {
                 showTips(message: message)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .playerDidFinishPlaying)) { _ in
+            print("🏁 [PlayerView] Received finish notification, dismissing...")
+            dismiss()
+        }
         .onExitCommand {
             dismiss()
         }

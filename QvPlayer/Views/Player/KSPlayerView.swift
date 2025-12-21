@@ -200,6 +200,14 @@ struct KSPlayerView: UIViewRepresentable {
             ]
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
             
+            // Check for completion (Simple polling detection)
+            if duration > 0 && (duration - currentTime) < 0.5 && !player.isPlaying {
+                 // Only trigger if we are very close to the end and stopped
+                 // This assumes the player stops automatically at the end
+                 print("🏁 [KSPlayer] Playback finished (detected via polling)")
+                 NotificationCenter.default.post(name: .playerDidFinishPlaying, object: nil)
+            }
+            
             // Update Debug Stats
             Task { @MainActor in
                 var stats = DebugLogger.shared.videoStats
