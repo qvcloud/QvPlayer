@@ -106,6 +106,10 @@ struct PlayerView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .queueDidFinish)) { _ in
+            print("🏁 [PlayerView] Queue finished, dismissing player")
+            dismiss()
+        }
         .onExitCommand {
             dismiss()
         }

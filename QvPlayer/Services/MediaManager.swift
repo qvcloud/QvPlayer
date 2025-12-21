@@ -92,7 +92,7 @@ class MediaManager: ObservableObject {
                 } else {
                     DebugLogger.shared.info("Queue finished. Clearing queue data.")
                     clearPlayQueue()
-                    notifyUpdate()
+                    NotificationCenter.default.post(name: .queueDidFinish, object: nil)
                 }
             }
         } else {
@@ -506,4 +506,5 @@ class MediaManager: ObservableObject {
 
 extension Notification.Name {
     static let playlistDidUpdate = Notification.Name("playlistDidUpdate")
+    static let queueDidFinish = Notification.Name("queueDidFinish")
 }
