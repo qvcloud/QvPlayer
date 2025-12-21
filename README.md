@@ -92,4 +92,8 @@ This project is for educational and personal use. Please refer to the licenses o
 
 ## 💬 Community
 
-Join our Telegram group for discussions and support: [https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)
+Join our Telegram group for discussions and support:
+
+<img src="Screenshot/tg.jpg" width="200"/>
+
+[https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)

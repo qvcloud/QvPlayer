@@ -92,4 +92,8 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 
 ## 💬 社区
 
-加入我们的 Telegram 群组进行讨论和支持：[https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)
+加入我们的 Telegram 群组进行讨论和支持：
+
+<img src="Screenshot/tg.jpg" width="200"/>
+
+[https://t.me/+KF2GIXtuEOY3MWI1](https://t.me/+KF2GIXtuEOY3MWI1)
