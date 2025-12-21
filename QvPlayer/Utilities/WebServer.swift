@@ -261,6 +261,10 @@ class WebServer {
             handleUpdateVideo(client: client, queryItems: queryItems, body: bodyString)
         } else if method == "POST" && path == "/api/v1/playlist" {
             handleReplacePlaylist(client: client, body: bodyString)
+        } else if method == "DELETE" && path == "/api/v1/videos/batch" {
+            handleBatchDeleteVideo(client: client, body: bodyString)
+        } else if method == "PUT" && path == "/api/v1/videos/batch/group" {
+            handleBatchUpdateGroup(client: client, body: bodyString)
         }
         // MARK: - Control Endpoints
         else if method == "POST" && path.hasPrefix("/api/v1/control/") {
@@ -602,6 +606,39 @@ class WebServer {
         }
         
         closeClient(client)
+    }
+    
+    private func handleBatchDeleteVideo(client: Client, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let indices = json["indices"] as? [Int] else {
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing indices\"}")
+            return
+        }
+        
+        do {
+            try PlaylistManager.shared.deleteVideos(at: indices)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to delete videos: \(error.localizedDescription)\"}")
+        }
+    }
+    
+    private func handleBatchUpdateGroup(client: Client, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let indices = json["indices"] as? [Int],
+              let group = json["group"] as? String else {
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            return
+        }
+        
+        do {
+            try PlaylistManager.shared.updateVideosGroup(at: indices, newGroup: group)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update videos: \(error.localizedDescription)\"}")
+        }
     }
     
     // Helper to get IP Address

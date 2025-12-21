@@ -103,8 +103,16 @@ class PlaylistManager: ObservableObject {
             throw error
         }
         var videos = getPlaylistVideos()
-        let isLive = !validURL.isFileURL
-        let newVideo = Video(title: title, url: validURL, group: group, isLive: isLive)
+        
+        let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
+        let isLive = !isLocal
+        
+        var finalGroup = group
+        if finalGroup == nil || finalGroup?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            finalGroup = isLocal ? "Local Uploads" : "Live Sources"
+        }
+        
+        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive)
         videos.append(newVideo)
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
@@ -144,9 +152,51 @@ class PlaylistManager: ObservableObject {
         }
         
         DebugLogger.shared.info("Updating video at index \(index): \(title)")
-        let isLive = !validURL.isFileURL
-        let newVideo = Video(title: title, url: validURL, group: group, isLive: isLive)
+        
+        let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
+        let isLive = !isLocal
+        
+        var finalGroup = group
+        if finalGroup == nil || finalGroup?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            finalGroup = isLocal ? "Local Uploads" : "Live Sources"
+        }
+        
+        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive)
         videos[index] = newVideo
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try savePlaylist(content: newContent)
+    }
+    
+    func deleteVideos(at indices: [Int]) throws {
+        var videos = getPlaylistVideos()
+        let sortedIndices = indices.sorted(by: >)
+        
+        for index in sortedIndices {
+            guard index >= 0 && index < videos.count else { continue }
+            let video = videos[index]
+            DebugLogger.shared.info("Deleting video: \(video.title)")
+            
+            // Clear cache and thumbnail
+            CacheManager.shared.removeCachedVideo(url: video.url)
+            CacheManager.shared.removeThumbnail(for: video.url)
+            
+            videos.remove(at: index)
+        }
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try savePlaylist(content: newContent)
+    }
+    
+    func updateVideosGroup(at indices: [Int], newGroup: String) throws {
+        var videos = getPlaylistVideos()
+        
+        for index in indices {
+            guard index >= 0 && index < videos.count else { continue }
+            var video = videos[index]
+            video.group = newGroup
+            videos[index] = video
+        }
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         try savePlaylist(content: newContent)

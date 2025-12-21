@@ -317,12 +317,22 @@ struct WebAssets {
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2>Library</h2>
-                            <button class="icon-btn" onclick="loadPlaylist()">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M23 4v6h-6M1 20v-6h6"/>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                                </svg>
-                            </button>
+                            <div style="display: flex; gap: 8px;">
+                                <div id="batchToolbar" style="display: none; gap: 8px;">
+                                    <button class="btn secondary" onclick="openBatchMoveModal()">Move Selected</button>
+                                    <button class="btn danger" onclick="batchDelete()">Delete Selected</button>
+                                </div>
+                                <button class="icon-btn" onclick="loadPlaylist()">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div style="padding: 8px 16px; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center;">
+                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="margin-right: 12px;">
+                            <label for="selectAll" style="font-size: 14px; color: var(--secondary-text);">Select All</label>
                         </div>
                         <ul id="playlist" class="video-list">
                             <!-- Items loaded via JS -->
@@ -387,9 +397,22 @@ struct WebAssets {
                     </div>
                 </div>
             </div>
+            
+            <!-- Batch Move Modal -->
+            <div id="batchMoveModal" class="modal">
+                <div class="modal-content">
+                    <h2>Move Selected to Group</h2>
+                    <input type="text" id="batchGroupInput" placeholder="New Group Name">
+                    <div class="modal-actions">
+                        <button onclick="closeBatchMoveModal()" class="btn secondary">Cancel</button>
+                        <button onclick="batchMove()" class="btn">Move</button>
+                    </div>
+                </div>
+            </div>
 
             <script>
                 let currentVideos = [];
+                let selectedIndices = new Set();
                 
                 function switchTab(tabId) {
                     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -510,17 +533,24 @@ struct WebAssets {
                         .then(res => res.json())
                         .then(data => {
                             currentVideos = data;
+                            selectedIndices.clear();
+                            updateBatchToolbar();
+                            document.getElementById('selectAll').checked = false;
+                            
                             const list = document.getElementById('playlist');
                             list.innerHTML = '';
                             data.forEach((video, index) => {
                                 const li = document.createElement('li');
                                 li.className = 'video-item';
                                 li.innerHTML = `
-                                    <div class="video-info">
-                                        <div class="video-title">${escapeHtml(video.title)}</div>
-                                        <div class="video-meta">
-                                            <span class="badge">${escapeHtml(video.group || 'Default')}</span>
-                                            <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
+                                    <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                                        <input type="checkbox" class="video-checkbox" onchange="toggleSelection(${index}, this)">
+                                        <div class="video-info">
+                                            <div class="video-title">${escapeHtml(video.title)}</div>
+                                            <div class="video-meta">
+                                                <span class="badge">${escapeHtml(video.group || 'Default')}</span>
+                                                <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="action-group">
@@ -538,6 +568,84 @@ struct WebAssets {
                                 list.appendChild(li);
                             });
                         });
+                }
+                
+                function toggleSelection(index, checkbox) {
+                    if (checkbox.checked) {
+                        selectedIndices.add(index);
+                    } else {
+                        selectedIndices.delete(index);
+                    }
+                    updateBatchToolbar();
+                }
+                
+                function toggleSelectAll(checkbox) {
+                    const checkboxes = document.querySelectorAll('.video-checkbox');
+                    checkboxes.forEach((cb, index) => {
+                        cb.checked = checkbox.checked;
+                        if (checkbox.checked) {
+                            selectedIndices.add(index);
+                        } else {
+                            selectedIndices.delete(index);
+                        }
+                    });
+                    updateBatchToolbar();
+                }
+                
+                function updateBatchToolbar() {
+                    const toolbar = document.getElementById('batchToolbar');
+                    if (selectedIndices.size > 0) {
+                        toolbar.style.display = 'flex';
+                    } else {
+                        toolbar.style.display = 'none';
+                    }
+                }
+                
+                function batchDelete() {
+                    if (!confirm(`Delete ${selectedIndices.size} selected items?`)) return;
+                    
+                    fetch('/api/v1/videos/batch', {
+                        method: 'DELETE',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ indices: Array.from(selectedIndices) })
+                    })
+                    .then(res => res.json())
+                    .then(res => {
+                        if (res.success) {
+                            loadPlaylist();
+                        } else {
+                            alert('Error: ' + (res.error || 'Unknown'));
+                        }
+                    });
+                }
+                
+                function openBatchMoveModal() {
+                    document.getElementById('batchMoveModal').classList.add('active');
+                }
+                
+                function closeBatchMoveModal() {
+                    document.getElementById('batchMoveModal').classList.remove('active');
+                }
+                
+                function batchMove() {
+                    const group = document.getElementById('batchGroupInput').value;
+                    fetch('/api/v1/videos/batch/group', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ 
+                            indices: Array.from(selectedIndices),
+                            group: group
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(res => {
+                        if (res.success) {
+                            closeBatchMoveModal();
+                            loadPlaylist();
+                        } else {
+                            alert('Error: ' + (res.error || 'Unknown'));
+                        }
+                    });
                 }
                 
                 function playVideo(index) {

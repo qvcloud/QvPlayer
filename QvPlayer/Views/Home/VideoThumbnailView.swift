@@ -11,7 +11,7 @@ struct VideoThumbnailView: View {
     
     var body: some View {
         ZStack {
-            Color.gray.opacity(0.3)
+            Color.primary.opacity(0.1)
             
             if let image = image {
                 Image(uiImage: image)
@@ -23,7 +23,7 @@ struct VideoThumbnailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 50, height: 50)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundStyle(.secondary)
                     .opacity(isLoading ? 0.5 : 1)
             }
         }

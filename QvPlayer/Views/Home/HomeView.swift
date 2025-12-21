@@ -12,12 +12,12 @@ struct HomeView: View {
                         Text("QvPlayer")
                             .font(.largeTitle)
                             .fontWeight(.heavy)
-                            .foregroundColor(.white)
+                            .foregroundStyle(.primary)
                         
                         Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
                             .font(.title3)
                             .fontWeight(.medium)
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.leading)
                     .padding(.top)
@@ -27,7 +27,7 @@ struct HomeView: View {
                             Spacer()
                             ProgressView("Loading Channels...")
                                 .progressViewStyle(.circular)
-                                .tint(.white)
+                                .tint(.primary)
                             Spacer()
                         }
                         .padding(.top, 100)
@@ -39,12 +39,12 @@ struct HomeView: View {
                                         Text(group.name)
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.white)
-                                            .padding(.vertical, 10)
-                                            .padding(.leading, 20) // Add some padding to align with title
+                                            .foregroundStyle(.primary)
+                                            .padding(.vertical, 12)
+                                            .padding(.leading, 20)
                                         Spacer()
                                     }
-                                    .background(Color.black) // Solid background for sticky header
+                                    .background(.regularMaterial)
                                 ) {
                                     ForEach(group.videos) { video in
                                         NavigationLink(value: video) {
@@ -106,36 +106,41 @@ struct VideoCard: View {
     let video: Video
     
     var body: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 VideoThumbnailView(url: video.url)
                     .aspectRatio(16/9, contentMode: .fit)
-                    .cornerRadius(10)
-                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
                 
                 if video.cachedURL != nil {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
                         .padding(6)
-                        .background(Color.black.opacity(0.6))
+                        .background(.ultraThinMaterial)
                         .clipShape(Circle())
                         .padding(6)
                 }
             }
             
-            Text(video.title)
-                .font(.headline)
-                .lineLimit(1)
-            
-            if let description = video.description {
-                Text(description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(video.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                
+                if let description = video.description {
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
+            .padding(.horizontal, 4)
+            .padding(.bottom, 4)
         }
-        .padding()
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(12)
+        .padding(10)
+        .background(Color.primary.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
 }
