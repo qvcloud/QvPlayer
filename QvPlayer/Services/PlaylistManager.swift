@@ -81,6 +81,12 @@ class PlaylistManager: ObservableObject {
         }
     }
     
+    private func notifyUpdate() {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        }
+    }
+    
     // MARK: - Public API
     
     func getPlaylistVideos() -> [Video] {
@@ -95,7 +101,7 @@ class PlaylistManager: ObservableObject {
         video.sortOrder = newOrder
         
         DatabaseManager.shared.updateVideo(video)
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func appendVideo(title: String, url: String, group: String? = nil) throws {
@@ -122,7 +128,7 @@ class PlaylistManager: ObservableObject {
         let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive, sortOrder: newSortOrder)
         DatabaseManager.shared.addVideo(newVideo)
         
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func appendPlaylist(content: String, customGroupName: String? = nil) throws {
@@ -131,6 +137,8 @@ class PlaylistManager: ObservableObject {
         
         let currentVideos = getPlaylistVideos()
         var minSortOrder = currentVideos.map { $0.sortOrder }.min() ?? 0
+        
+        var videosToAdd = [Video]()
         
         for video in newVideos {
             var v = video
@@ -148,10 +156,11 @@ class PlaylistManager: ObservableObject {
             minSortOrder -= 1
             v.sortOrder = minSortOrder
             
-            DatabaseManager.shared.addVideo(v)
+            videosToAdd.append(v)
         }
         
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        DatabaseManager.shared.addVideos(videosToAdd)
+        notifyUpdate()
     }
     
     func replacePlaylist(content: String) throws {
@@ -162,6 +171,7 @@ class PlaylistManager: ObservableObject {
         
         // 2. Import new content
         let newVideos = PlaylistService.shared.parseM3U(content: content)
+        var videosToAdd = [Video]()
         
         for (index, var video) in newVideos.enumerated() {
             // Preserve order
@@ -174,10 +184,11 @@ class PlaylistManager: ObservableObject {
                 video.group = "Imported"
             }
             
-            DatabaseManager.shared.addVideo(video)
+            videosToAdd.append(video)
         }
         
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        DatabaseManager.shared.addVideos(videosToAdd)
+        notifyUpdate()
     }
     
     func deleteVideo(at index: Int) throws {
@@ -195,7 +206,7 @@ class PlaylistManager: ObservableObject {
         CacheManager.shared.removeThumbnail(for: video.url)
         
         DatabaseManager.shared.deleteVideo(id: video.id)
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func updateVideo(at index: Int, title: String, url: String, group: String? = nil) throws {
@@ -229,7 +240,7 @@ class PlaylistManager: ObservableObject {
         video.isLive = isLive
         
         DatabaseManager.shared.updateVideo(video)
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func deleteVideo(_ video: Video) {
@@ -240,7 +251,7 @@ class PlaylistManager: ObservableObject {
         CacheManager.shared.removeThumbnail(for: video.url)
         
         DatabaseManager.shared.deleteVideo(id: video.id)
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func deleteGroup(_ groupName: String) {
@@ -260,7 +271,7 @@ class PlaylistManager: ObservableObject {
              DatabaseManager.shared.deleteVideo(id: video.id)
         }
         
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func clearAllData() {
@@ -278,7 +289,7 @@ class PlaylistManager: ObservableObject {
         try? FileManager.default.removeItem(at: cachesURL)
         
         // 4. Notify UI
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
 
     func deleteVideos(at indices: [Int]) throws {
@@ -296,7 +307,7 @@ class PlaylistManager: ObservableObject {
             DatabaseManager.shared.deleteVideo(id: video.id)
         }
         
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
     
     func updateVideosGroup(at indices: [Int], newGroup: String) throws {
@@ -308,7 +319,7 @@ class PlaylistManager: ObservableObject {
             video.group = newGroup
             DatabaseManager.shared.updateVideo(video)
         }
-        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+        notifyUpdate()
     }
 }
 

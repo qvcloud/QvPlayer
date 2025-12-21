@@ -5,10 +5,13 @@ class DatabaseManager {
     static let shared = DatabaseManager()
     private var db: OpaquePointer?
     private let dbName = "QvPlayer.sqlite"
+    private let queue = DispatchQueue(label: "com.qvplayer.database", qos: .userInitiated)
     
     private init() {
-        openDatabase()
-        createTable()
+        queue.sync {
+            openDatabase()
+            createTable()
+        }
     }
     
     private var primaryDbPath: String {
@@ -178,251 +181,335 @@ class DatabaseManager {
     }
     
     func addVideo(_ video: Video) {
-        ensureDatabaseIsOpen()
-        guard let db = db else {
-            DebugLogger.shared.error("Database is not open")
-            return
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else {
+                DebugLogger.shared.error("Database is not open")
+                return
+            }
+            let insertSQL = """
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            DebugLogger.shared.info("📝 [SQL] Executing: INSERT INTO library... \(video.title)")
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (video.id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (video.title as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 3, (video.url.absoluteString as NSString).utf8String, -1, nil)
+                
+                if let group = video.group {
+                    sqlite3_bind_text(stmt, 4, (group as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 4)
+                }
+                
+                sqlite3_bind_int(stmt, 5, video.isLive ? 1 : 0)
+                
+                if let desc = video.description {
+                    sqlite3_bind_text(stmt, 6, (desc as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 6)
+                }
+                
+                if let thumb = video.thumbnailURL {
+                    sqlite3_bind_text(stmt, 7, (thumb.absoluteString as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 7)
+                }
+                
+                if let cached = video.cachedURL {
+                    sqlite3_bind_text(stmt, 8, (cached.absoluteString as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 8)
+                }
+                
+                if let latency = video.latency {
+                    sqlite3_bind_double(stmt, 9, latency)
+                } else {
+                    sqlite3_bind_null(stmt, 9)
+                }
+                
+                if let lastCheck = video.lastLatencyCheck {
+                    sqlite3_bind_double(stmt, 10, lastCheck.timeIntervalSince1970)
+                } else {
+                    sqlite3_bind_null(stmt, 10)
+                }
+                
+                sqlite3_bind_int(stmt, 11, Int32(video.sortOrder))
+                
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    DebugLogger.shared.error("Could not insert video.")
+                }
+            } else {
+                DebugLogger.shared.error("INSERT video statement could not be prepared.")
+            }
+            sqlite3_finalize(stmt)
         }
-        let insertSQL = """
-        INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-        """
-        DebugLogger.shared.info("📝 [SQL] Executing: INSERT INTO library... \(video.title)")
-        
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (video.id.uuidString as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (video.title as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 3, (video.url.absoluteString as NSString).utf8String, -1, nil)
+    }
+    
+    func addVideos(_ videos: [Video]) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
             
-            if let group = video.group {
-                sqlite3_bind_text(stmt, 4, (group as NSString).utf8String, -1, nil)
+            sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
+            
+            let insertSQL = """
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+                for video in videos {
+                    sqlite3_bind_text(stmt, 1, (video.id.uuidString as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 2, (video.title as NSString).utf8String, -1, nil)
+                    sqlite3_bind_text(stmt, 3, (video.url.absoluteString as NSString).utf8String, -1, nil)
+                    
+                    if let group = video.group {
+                        sqlite3_bind_text(stmt, 4, (group as NSString).utf8String, -1, nil)
+                    } else {
+                        sqlite3_bind_null(stmt, 4)
+                    }
+                    
+                    sqlite3_bind_int(stmt, 5, video.isLive ? 1 : 0)
+                    
+                    if let desc = video.description {
+                        sqlite3_bind_text(stmt, 6, (desc as NSString).utf8String, -1, nil)
+                    } else {
+                        sqlite3_bind_null(stmt, 6)
+                    }
+                    
+                    if let thumb = video.thumbnailURL {
+                        sqlite3_bind_text(stmt, 7, (thumb.absoluteString as NSString).utf8String, -1, nil)
+                    } else {
+                        sqlite3_bind_null(stmt, 7)
+                    }
+                    
+                    if let cached = video.cachedURL {
+                        sqlite3_bind_text(stmt, 8, (cached.absoluteString as NSString).utf8String, -1, nil)
+                    } else {
+                        sqlite3_bind_null(stmt, 8)
+                    }
+                    
+                    if let latency = video.latency {
+                        sqlite3_bind_double(stmt, 9, latency)
+                    } else {
+                        sqlite3_bind_null(stmt, 9)
+                    }
+                    
+                    if let lastCheck = video.lastLatencyCheck {
+                        sqlite3_bind_double(stmt, 10, lastCheck.timeIntervalSince1970)
+                    } else {
+                        sqlite3_bind_null(stmt, 10)
+                    }
+                    
+                    sqlite3_bind_int(stmt, 11, Int32(video.sortOrder))
+                    
+                    if sqlite3_step(stmt) != SQLITE_DONE {
+                        DebugLogger.shared.error("Could not insert video in batch.")
+                    }
+                    sqlite3_reset(stmt)
+                }
             } else {
-                sqlite3_bind_null(stmt, 4)
+                DebugLogger.shared.error("Batch INSERT statement could not be prepared.")
             }
-            
-            sqlite3_bind_int(stmt, 5, video.isLive ? 1 : 0)
-            
-            if let desc = video.description {
-                sqlite3_bind_text(stmt, 6, (desc as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 6)
-            }
-            
-            if let thumb = video.thumbnailURL {
-                sqlite3_bind_text(stmt, 7, (thumb.absoluteString as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 7)
-            }
-            
-            if let cached = video.cachedURL {
-                sqlite3_bind_text(stmt, 8, (cached.absoluteString as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 8)
-            }
-            
-            if let latency = video.latency {
-                sqlite3_bind_double(stmt, 9, latency)
-            } else {
-                sqlite3_bind_null(stmt, 9)
-            }
-            
-            if let lastCheck = video.lastLatencyCheck {
-                sqlite3_bind_double(stmt, 10, lastCheck.timeIntervalSince1970)
-            } else {
-                sqlite3_bind_null(stmt, 10)
-            }
-            
-            sqlite3_bind_int(stmt, 11, Int32(video.sortOrder))
-            
-            if sqlite3_step(stmt) != SQLITE_DONE {
-                DebugLogger.shared.error("Could not insert video.")
-            }
-        } else {
-            DebugLogger.shared.error("INSERT video statement could not be prepared.")
+            sqlite3_finalize(stmt)
+            sqlite3_exec(db, "COMMIT", nil, nil, nil)
         }
-        sqlite3_finalize(stmt)
     }
     
     func updateVideo(_ video: Video) {
-        ensureDatabaseIsOpen()
-        guard let db = db else { return }
-        let updateSQL = """
-        UPDATE library SET 
-            title = ?, url = ?, group_name = ?, is_live = ?, description = ?, 
-            thumbnail_url = ?, cached_url = ?, latency = ?, last_check = ?, sort_order = ?
-        WHERE id = ?;
-        """
-        DebugLogger.shared.info("📝 [SQL] Executing: UPDATE library... \(video.title)")
-        
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (video.title as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (video.url.absoluteString as NSString).utf8String, -1, nil)
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            let updateSQL = """
+            UPDATE library SET 
+                title = ?, url = ?, group_name = ?, is_live = ?, description = ?, 
+                thumbnail_url = ?, cached_url = ?, latency = ?, last_check = ?, sort_order = ?
+            WHERE id = ?;
+            """
+            DebugLogger.shared.info("📝 [SQL] Executing: UPDATE library... \(video.title)")
             
-            if let group = video.group {
-                sqlite3_bind_text(stmt, 3, (group as NSString).utf8String, -1, nil)
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (video.title as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (video.url.absoluteString as NSString).utf8String, -1, nil)
+                
+                if let group = video.group {
+                    sqlite3_bind_text(stmt, 3, (group as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 3)
+                }
+                
+                sqlite3_bind_int(stmt, 4, video.isLive ? 1 : 0)
+                
+                if let desc = video.description {
+                    sqlite3_bind_text(stmt, 5, (desc as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 5)
+                }
+                
+                if let thumb = video.thumbnailURL {
+                    sqlite3_bind_text(stmt, 6, (thumb.absoluteString as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 6)
+                }
+                
+                if let cached = video.cachedURL {
+                    sqlite3_bind_text(stmt, 7, (cached.absoluteString as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 7)
+                }
+                
+                if let latency = video.latency {
+                    sqlite3_bind_double(stmt, 8, latency)
+                } else {
+                    sqlite3_bind_null(stmt, 8)
+                }
+                
+                if let lastCheck = video.lastLatencyCheck {
+                    sqlite3_bind_double(stmt, 9, lastCheck.timeIntervalSince1970)
+                } else {
+                    sqlite3_bind_null(stmt, 9)
+                }
+                
+                sqlite3_bind_int(stmt, 10, Int32(video.sortOrder))
+                sqlite3_bind_text(stmt, 11, (video.id.uuidString as NSString).utf8String, -1, nil)
+                
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    DebugLogger.shared.error("Could not update video.")
+                }
             } else {
-                sqlite3_bind_null(stmt, 3)
+                DebugLogger.shared.error("UPDATE video statement could not be prepared.")
             }
-            
-            sqlite3_bind_int(stmt, 4, video.isLive ? 1 : 0)
-            
-            if let desc = video.description {
-                sqlite3_bind_text(stmt, 5, (desc as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 5)
-            }
-            
-            if let thumb = video.thumbnailURL {
-                sqlite3_bind_text(stmt, 6, (thumb.absoluteString as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 6)
-            }
-            
-            if let cached = video.cachedURL {
-                sqlite3_bind_text(stmt, 7, (cached.absoluteString as NSString).utf8String, -1, nil)
-            } else {
-                sqlite3_bind_null(stmt, 7)
-            }
-            
-            if let latency = video.latency {
-                sqlite3_bind_double(stmt, 8, latency)
-            } else {
-                sqlite3_bind_null(stmt, 8)
-            }
-            
-            if let lastCheck = video.lastLatencyCheck {
-                sqlite3_bind_double(stmt, 9, lastCheck.timeIntervalSince1970)
-            } else {
-                sqlite3_bind_null(stmt, 9)
-            }
-            
-            sqlite3_bind_int(stmt, 10, Int32(video.sortOrder))
-            sqlite3_bind_text(stmt, 11, (video.id.uuidString as NSString).utf8String, -1, nil)
-            
-            if sqlite3_step(stmt) != SQLITE_DONE {
-                DebugLogger.shared.error("Could not update video.")
-            }
-        } else {
-            DebugLogger.shared.error("UPDATE video statement could not be prepared.")
+            sqlite3_finalize(stmt)
         }
-        sqlite3_finalize(stmt)
     }
     
     func deleteVideo(id: UUID) {
-        ensureDatabaseIsOpen()
-        guard let db = db else { return }
-        let deleteSQL = "DELETE FROM library WHERE id = ?;"
-        DebugLogger.shared.info("📝 [SQL] Executing: DELETE FROM library WHERE id = \(id)")
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (id.uuidString as NSString).utf8String, -1, nil)
-            if sqlite3_step(stmt) != SQLITE_DONE {
-                DebugLogger.shared.error("Could not delete video.")
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            let deleteSQL = "DELETE FROM library WHERE id = ?;"
+            DebugLogger.shared.info("📝 [SQL] Executing: DELETE FROM library WHERE id = \(id)")
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id.uuidString as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    DebugLogger.shared.error("Could not delete video.")
+                }
             }
+            sqlite3_finalize(stmt)
         }
-        sqlite3_finalize(stmt)
     }
     
     func deleteAllVideos() {
-        ensureDatabaseIsOpen()
-        guard let db = db else { return }
-        let deleteSQL = "DELETE FROM library;"
-        DebugLogger.shared.info("📝 [SQL] Executing: DELETE FROM library")
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK {
-            if sqlite3_step(stmt) != SQLITE_DONE {
-                DebugLogger.shared.error("Could not delete all videos.")
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            let deleteSQL = "DELETE FROM library;"
+            DebugLogger.shared.info("📝 [SQL] Executing: DELETE FROM library")
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, deleteSQL, -1, &stmt, nil) == SQLITE_OK {
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    DebugLogger.shared.error("Could not delete all videos.")
+                }
             }
+            sqlite3_finalize(stmt)
         }
-        sqlite3_finalize(stmt)
     }
     
     func getAllVideos() -> [Video] {
-        ensureDatabaseIsOpen()
-        guard let db = db else { return [] }
-        var videos = [Video]()
-        let querySQL = "SELECT * FROM library ORDER BY sort_order DESC;"
-        DebugLogger.shared.info("📝 [SQL] Executing: \(querySQL)")
-        
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                let idStr = String(cString: sqlite3_column_text(stmt, 0))
-                let title = String(cString: sqlite3_column_text(stmt, 1))
-                let urlStr = String(cString: sqlite3_column_text(stmt, 2))
-                
-                var group: String?
-                if let ptr = sqlite3_column_text(stmt, 3) {
-                    group = String(cString: ptr)
-                }
-                
-                let isLive = sqlite3_column_int(stmt, 4) != 0
-                
-                var description: String?
-                if let ptr = sqlite3_column_text(stmt, 5) {
-                    description = String(cString: ptr)
-                }
-                
-                var thumbnailURL: URL?
-                if let ptr = sqlite3_column_text(stmt, 6) {
-                    thumbnailURL = URL(string: String(cString: ptr))
-                }
-                
-                var cachedURL: URL?
-                if let ptr = sqlite3_column_text(stmt, 7) {
-                    cachedURL = URL(string: String(cString: ptr))
-                }
-                
-                var latency: Double?
-                if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
-                    latency = sqlite3_column_double(stmt, 8)
-                }
-                
-                var lastCheck: Date?
-                if sqlite3_column_type(stmt, 9) != SQLITE_NULL {
-                    lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9))
-                }
-                
-                let sortOrder = Int(sqlite3_column_int(stmt, 10))
-                
-                if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
-                    let video = Video(
-                        id: id,
-                        title: title,
-                        url: url,
-                        group: group,
-                        isLive: isLive,
-                        description: description,
-                        thumbnailURL: thumbnailURL,
-                        cachedURL: cachedURL,
-                        latency: latency,
-                        lastLatencyCheck: lastCheck,
-                        sortOrder: sortOrder
-                    )
-                    videos.append(video)
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return [] }
+            var videos = [Video]()
+            let querySQL = "SELECT * FROM library ORDER BY sort_order DESC;"
+            DebugLogger.shared.info("📝 [SQL] Executing: \(querySQL)")
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let idStr = String(cString: sqlite3_column_text(stmt, 0))
+                    let title = String(cString: sqlite3_column_text(stmt, 1))
+                    let urlStr = String(cString: sqlite3_column_text(stmt, 2))
+                    
+                    var group: String?
+                    if let ptr = sqlite3_column_text(stmt, 3) {
+                        group = String(cString: ptr)
+                    }
+                    
+                    let isLive = sqlite3_column_int(stmt, 4) != 0
+                    
+                    var description: String?
+                    if let ptr = sqlite3_column_text(stmt, 5) {
+                        description = String(cString: ptr)
+                    }
+                    
+                    var thumbnailURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 6) {
+                        thumbnailURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var cachedURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 7) {
+                        cachedURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var latency: Double?
+                    if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+                        latency = sqlite3_column_double(stmt, 8)
+                    }
+                    
+                    var lastCheck: Date?
+                    if sqlite3_column_type(stmt, 9) != SQLITE_NULL {
+                        lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9))
+                    }
+                    
+                    let sortOrder = Int(sqlite3_column_int(stmt, 10))
+                    
+                    if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
+                        let video = Video(
+                            id: id,
+                            title: title,
+                            url: url,
+                            group: group,
+                            isLive: isLive,
+                            description: description,
+                            thumbnailURL: thumbnailURL,
+                            cachedURL: cachedURL,
+                            latency: latency,
+                            lastLatencyCheck: lastCheck,
+                            sortOrder: sortOrder
+                        )
+                        videos.append(video)
+                    }
                 }
             }
+            sqlite3_finalize(stmt)
+            return videos
         }
-        sqlite3_finalize(stmt)
-        return videos
     }
     
     // Legacy support for migration
     func saveLatency(for url: String, latency: Double, lastCheck: Date) {
-        ensureDatabaseIsOpen()
-        guard let db = db else { return }
-        // Also update the main library table if it exists
-        let updateSQL = "UPDATE library SET latency = ?, last_check = ? WHERE url = ?;"
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_double(stmt, 1, latency)
-            sqlite3_bind_double(stmt, 2, lastCheck.timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 3, (url as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            // Also update the main library table if it exists
+            let updateSQL = "UPDATE library SET latency = ?, last_check = ? WHERE url = ?;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, updateSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_double(stmt, 1, latency)
+                sqlite3_bind_double(stmt, 2, lastCheck.timeIntervalSince1970)
+                sqlite3_bind_text(stmt, 3, (url as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
         }
-        sqlite3_finalize(stmt)
     }
     
     func getAllMetadata() -> [String: (Double, Date)] {

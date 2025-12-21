@@ -35,7 +35,11 @@ class HomeViewModel: ObservableObject {
         defer { isLoading = false }
         
         // Try to load from local storage first
-        let localVideos = PlaylistManager.shared.getPlaylistVideos()
+        // Run on background thread to avoid blocking UI
+        let localVideos = await Task.detached(priority: .userInitiated) {
+            return PlaylistManager.shared.getPlaylistVideos()
+        }.value
+        
         DebugLogger.shared.info("Loaded \(localVideos.count) videos from local storage")
         
         self.videos = localVideos

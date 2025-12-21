@@ -235,7 +235,6 @@ class WebServer {
         let queryItems = urlComponents.queryItems ?? []
         
         let bodyData = data.subdata(in: range.upperBound..<data.count)
-        // Only convert to string if needed, and be careful with binary data
         let bodyString = String(data: bodyData, encoding: .utf8) ?? ""
         
         if path != "/api/v1/status" {
@@ -243,223 +242,73 @@ class WebServer {
             DebugLogger.shared.info("REQ: \(method) \(path)")
         }
         
+        // Static Content
         if method == "GET" && path == "/" {
             sendResponse(client: client, body: WebAssets.htmlContent)
+            return
         } else if method == "GET" && path == "/api/v1/docs" {
              sendResponse(client: client, body: WebAssets.apiDocsContent)
-        } 
-        // MARK: - API Endpoints
-        else if method == "GET" && (path == "/api/v1/playlist" || path == "/api/v1/videos") {
-            handleGetVideos(client: client)
+             return
+        }
+        
+        // API Handlers via Controller
+        var responseBody: String?
+        var success = true
+        var message: String?
+        
+        if method == "GET" && (path == "/api/v1/playlist" || path == "/api/v1/videos") {
+            responseBody = WebAPIController.shared.handleGetVideos()
+            if responseBody == nil { success = false; message = "Failed to serialize" }
         } else if method == "GET" && path == "/api/v1/status" {
-            handleGetStatus(client: client)
+            responseBody = WebAPIController.shared.handleGetStatus(currentStatus: currentStatus)
         } else if method == "POST" && path == "/api/v1/videos" {
-            handleAddVideo(client: client, body: bodyString)
+            (success, message) = WebAPIController.shared.handleAddVideo(body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/videos" {
-            handleDeleteVideo(client: client, queryItems: queryItems)
+            (success, message) = WebAPIController.shared.handleDeleteVideo(queryItems: queryItems)
         } else if method == "PUT" && path == "/api/v1/videos" {
-            handleUpdateVideo(client: client, queryItems: queryItems, body: bodyString)
+            (success, message) = WebAPIController.shared.handleUpdateVideo(queryItems: queryItems, body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/videos/batch" {
-            handleBatchDeleteVideo(client: client, body: bodyString)
+            (success, message) = WebAPIController.shared.handleBatchDeleteVideo(body: bodyString)
         } else if method == "PUT" && path == "/api/v1/videos/batch/group" {
-            handleBatchUpdateGroup(client: client, body: bodyString)
+            (success, message) = WebAPIController.shared.handleBatchUpdateGroup(body: bodyString)
         } else if method == "PUT" && path == "/api/v1/videos/sort" {
-            handleUpdateSortOrder(client: client, body: bodyString)
+            (success, message) = WebAPIController.shared.handleUpdateSortOrder(body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/groups" {
-            handleDeleteGroup(client: client, body: bodyString)
+            (success, message) = WebAPIController.shared.handleDeleteGroup(body: bodyString)
+        } else if method == "POST" && path.hasPrefix("/api/v1/control/") {
+            (success, message) = WebAPIController.shared.handleControl(path: path, queryItems: queryItems)
         }
-        // MARK: - Control Endpoints
-        else if method == "POST" && path.hasPrefix("/api/v1/control/") {
-            handleControl(client: client, path: path, queryItems: queryItems)
-        }
-        // MARK: - Upload Endpoint
+        // Uploads (Keep local for now due to complexity)
         else if method == "POST" && path == "/api/v1/upload" {
             handleUpload(client: client, headers: headersString, body: bodyData)
+            return
         } else if method == "POST" && path == "/api/v1/upload/remote" {
             handleRemoteUpload(client: client, body: bodyString)
+            return
         }
-        // MARK: - Legacy / Form Endpoints
+        // Legacy
         else if method == "POST" && path == "/api/v1/delete" {
-            // Legacy form support
-            let params = parseParams(bodyString)
-            if let indexStr = params["index"], let index = Int(indexStr) {
-                do {
-                    try PlaylistManager.shared.deleteVideo(at: index)
-                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-                } catch {
-                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to delete video: \(error.localizedDescription)")
-                }
-            } else {
-                sendResponse(client: client, status: "400 Bad Request", body: "Missing index")
-            }
-        } else if method == "POST" && path == "/api/v1/edit" {
-            // Legacy form support
-            let params = parseParams(bodyString)
-            if let indexStr = params["index"], let index = Int(indexStr),
-               let title = params["title"], let url = params["url"] {
-                let group = params["group"]
-                do {
-                    try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-                } catch {
-                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to update video: \(error.localizedDescription)")
-                }
-            } else {
-                sendResponse(client: client, status: "400 Bad Request", body: "Missing parameters")
-            }
-        } else if method == "POST" && path == "/update" {
-            // Legacy form support
-            let decodedBody = bodyString.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? bodyString
-            var m3uContent = decodedBody
-            if decodedBody.hasPrefix("playlist=") {
-                m3uContent = String(decodedBody.dropFirst(9))
-            }
-            do {
-                try PlaylistManager.shared.replacePlaylist(content: m3uContent)
-                let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
-                sendResponse(client: client, body: successPage)
-            } catch {
-                sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to save playlist: \(error.localizedDescription)")
-            }
+             sendResponse(client: client, status: "400 Bad Request", body: "Legacy API deprecated")
+             return
         } else {
             sendResponse(client: client, status: "404 Not Found", body: "Not Found")
+            return
+        }
+        
+        if let body = responseBody {
+            sendResponse(client: client, contentType: "application/json", body: body)
+        } else if success {
+            let msg = message ?? "Success"
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"\(msg)\"}")
+        } else {
+            let msg = message ?? "Unknown Error"
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"\(msg)\"}")
         }
     }
     
     // MARK: - API Handlers
-    
-    private func handleGetVideos(client: Client) {
-        let videos = PlaylistManager.shared.getPlaylistVideos()
-        DebugLogger.shared.info("API: Get Videos - Found \(videos.count) items")
-        
-        let jsonItems = videos.map { video -> [String: Any] in
-            var dict: [String: Any] = [
-                "title": video.title,
-                "url": video.url.absoluteString,
-                "group": video.group ?? "",
-                "isLive": video.isLive,
-                "sortOrder": video.sortOrder
-            ]
-            
-            if let latency = video.latency {
-                dict["latency"] = latency
-            }
-            
-            if let lastCheck = video.lastLatencyCheck {
-                dict["lastLatencyCheck"] = lastCheck.timeIntervalSince1970
-            }
-            
-            return dict
-        }
-        
-        if let data = try? JSONSerialization.data(withJSONObject: jsonItems, options: .prettyPrinted),
-           let jsonString = String(data: data, encoding: .utf8) {
-            sendResponse(client: client, contentType: "application/json", body: jsonString)
-        } else {
-            DebugLogger.shared.error("API: Failed to serialize videos")
-            sendResponse(client: client, status: "500 Internal Server Error", body: "[]")
-        }
-    }
-    
-    private func handleGetStatus(client: Client) {
-        if let data = try? JSONSerialization.data(withJSONObject: currentStatus),
-           let jsonString = String(data: data, encoding: .utf8) {
-            sendResponse(client: client, contentType: "application/json", body: jsonString)
-        } else {
-            sendResponse(client: client, status: "500 Internal Server Error", body: "{}")
-        }
-    }
-    
-    private func handleAddVideo(client: Client, body: String) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let title = json["title"],
-              let url = json["url"] else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
-            return
-        }
-        
-        let group = json["group"]
-        do {
-            try PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to add video: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleDeleteVideo(client: Client, queryItems: [URLQueryItem]) {
-        guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
-              let index = Int(indexStr) else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
-            return
-        }
-        
-        do {
-            try PlaylistManager.shared.deleteVideo(at: index)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to delete video: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleUpdateVideo(client: Client, queryItems: [URLQueryItem], body: String) {
-        guard let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
-              let index = Int(indexStr) else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Missing or invalid index parameter\"}")
-            return
-        }
-        
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let title = json["title"],
-              let url = json["url"] else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
-            return
-        }
-        
-        let group = json["group"]
-        do {
-            try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update video: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleControl(client: Client, path: String, queryItems: [URLQueryItem]) {
-        let action = path.replacingOccurrences(of: "/api/v1/control/", with: "")
-        
-        DispatchQueue.main.async {
-            DebugLogger.shared.lastRemoteCommand = action
-        }
-        
-        switch action {
-        case "play":
-            NotificationCenter.default.post(name: .commandPlay, object: nil)
-        case "pause":
-            NotificationCenter.default.post(name: .commandPause, object: nil)
-        case "toggle":
-            NotificationCenter.default.post(name: .commandToggle, object: nil)
-        case "seek":
-            if let secondsStr = queryItems.first(where: { $0.name == "time" })?.value,
-               let seconds = Double(secondsStr) {
-                NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": seconds])
-            }
-        case "play_video":
-            if let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
-               let index = Int(indexStr) {
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["index": index])
-                }
-            }
-        default:
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Unknown action\"}")
-            return
-        }
-        
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-    }
+    // Handlers moved to WebAPIController
+
     
     private func handleUpload(client: Client, headers: String, body: Data) {
         print("📂 [Upload] Starting upload handling. Body size: \(body.count)")
@@ -716,67 +565,8 @@ class WebServer {
         closeClient(client)
     }
     
-    private func handleBatchDeleteVideo(client: Client, body: String) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let indices = json["indices"] as? [Int] else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing indices\"}")
-            return
-        }
-        
-        do {
-            try PlaylistManager.shared.deleteVideos(at: indices)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to delete videos: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleBatchUpdateGroup(client: Client, body: String) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let indices = json["indices"] as? [Int],
-              let group = json["group"] as? String else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
-            return
-        }
-        
-        do {
-            try PlaylistManager.shared.updateVideosGroup(at: indices, newGroup: group)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update videos: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleUpdateSortOrder(client: Client, body: String) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let index = json["index"] as? Int,
-              let newOrder = json["sortOrder"] as? Int else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
-            return
-        }
-        
-        do {
-            try PlaylistManager.shared.updateVideoSortOrder(at: index, newOrder: newOrder)
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update sort order: \(error.localizedDescription)\"}")
-        }
-    }
-    
-    private func handleDeleteGroup(client: Client, body: String) {
-        guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let group = json["group"] as? String else {
-            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing group\"}")
-            return
-        }
-        
-        PlaylistManager.shared.deleteGroup(group)
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
-    }
+    // Batch handlers moved to WebAPIController
+
     
     // Helper to get IP Address
     func getIPAddress() -> String? {
