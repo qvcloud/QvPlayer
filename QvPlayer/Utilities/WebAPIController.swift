@@ -54,6 +54,7 @@ class WebAPIController {
             
             if let video = item.video {
                 dict["video"] = [
+                    "id": video.id.uuidString,
                     "title": video.title,
                     "url": video.url.absoluteString,
                     "group": video.group ?? "",
@@ -206,10 +207,13 @@ class WebAPIController {
                 NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": seconds])
             }
         case "play_video":
-            if let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
-               let index = Int(indexStr) {
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["index": index])
+            if let idStr = queryItems.first(where: { $0.name == "id" })?.value,
+               let id = UUID(uuidString: idStr) {
+                let videos = MediaManager.shared.getVideos()
+                if let video = videos.first(where: { $0.id == id }) {
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+                    }
                 }
             }
         default:
@@ -234,6 +238,7 @@ class WebAPIController {
             
             if let video = item.video {
                 dict["video"] = [
+                    "id": video.id.uuidString,
                     "title": video.title,
                     "url": video.url.absoluteString,
                     "group": video.group ?? "",
@@ -290,6 +295,12 @@ class WebAPIController {
     }
     
     func handleClearQueue(queryItems: [URLQueryItem]) -> (success: Bool, message: String?) {
+        if let idStr = queryItems.first(where: { $0.name == "id" })?.value,
+           let id = UUID(uuidString: idStr) {
+            MediaManager.shared.removePlayQueueItem(id: id)
+            return (true, nil)
+        }
+        
         MediaManager.shared.clearPlayQueue()
         return (true, nil)
     }

@@ -582,6 +582,22 @@ struct WebAssets {
                     });
                 }
 
+                function deleteQueueItem(id, event) {
+                    if (event) event.stopPropagation();
+                    if (!confirm('Remove this item from queue?')) return;
+                    
+                    fetch('/api/v1/queue?id=' + id, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.success) {
+                            alert('Failed to remove item: ' + (data.message || 'Unknown error'));
+                        }
+                    })
+                    .catch(err => console.error('Error removing item:', err));
+                }
+
                 function clearQueue() {
                     if (!confirm('Are you sure you want to clear the playlist queue?')) return;
                     
@@ -900,22 +916,25 @@ struct WebAssets {
                                     <div class="video-meta" style="font-size: 11px;">${escapeHtml(video.group || 'Default')}</div>
                                 </div>
                             </div>
-                            ${item.status !== 'played' ? `
-                            <button class="icon-btn" onclick="playQueueVideo('${video.id}')" style="padding: 4px;">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                            </button>
-                            ` : ''}
+                            <div style="display: flex; align-items: center; gap: 4px;">
+                                ${item.status !== 'played' ? `
+                                <button class="icon-btn" onclick="playQueueVideo('${video.id}')" style="padding: 4px;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                ` : ''}
+                                <button class="icon-btn danger" onclick="deleteQueueItem('${item.id}', event)" title="Remove from Queue" style="padding: 4px;">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                </button>
+                            </div>
                         `;
                         list.appendChild(li);
                     });
                 }
                 
                 function playQueueVideo(videoId) {
-                    // Find index in main list to play
-                    const index = currentVideos.findIndex(v => v.id === videoId);
-                    if (index !== -1) {
-                        playVideo(index);
-                    }
+                    fetch('/api/v1/control/play_video?id=' + videoId, { method: 'POST' });
                 }
                 
                 function loadGroups() {
@@ -1096,9 +1115,11 @@ struct WebAssets {
                                 </div>
                             </div>
                             <div class="action-group">
+                                ${isLive ? `
                                 <button class="icon-btn" onclick="playVideo(${index})" title="Play">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                                 </button>
+                                ` : ''}
                                 <button class="icon-btn" onclick="addToQueue(${index})" title="Add to Queue">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M12 5v14M5 12h14"/>
@@ -1310,7 +1331,10 @@ struct WebAssets {
                 }
                 
                 function playVideo(index) {
-                    fetch('/api/v1/control/play_video?index=' + index, { method: 'POST' });
+                    const video = currentVideos[index];
+                    if (video && video.id) {
+                        fetch('/api/v1/control/play_video?id=' + video.id, { method: 'POST' });
+                    }
                 }
                 
                 function deleteVideo(index) {

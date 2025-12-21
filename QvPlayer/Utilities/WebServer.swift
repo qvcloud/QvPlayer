@@ -238,8 +238,14 @@ class WebServer {
         let bodyString = String(data: bodyData, encoding: .utf8) ?? ""
         
         if path != "/api/v1/status" {
-            print("Request: \(method) \(path)")
-            DebugLogger.shared.info("REQ: \(method) \(path)")
+            var logBody = bodyString
+            if logBody.count > 500 {
+                logBody = String(logBody.prefix(500)) + "...(truncated)"
+            }
+            let bodyLogPart = logBody.isEmpty ? "" : " Body: \(logBody)"
+            
+            print("Request: \(method) \(fullPath)")
+            DebugLogger.shared.info("REQ: \(method) \(fullPath)\(bodyLogPart)")
         }
         
         // Static Content

@@ -479,6 +479,11 @@ class MediaManager: ObservableObject {
         NotificationCenter.default.post(name: .queueDidFinish, object: nil)
     }
     
+    func removePlayQueueItem(id: UUID) {
+        DatabaseManager.shared.removePlayQueueItem(id: id)
+        notifyUpdate()
+    }
+    
     func updateQueueItemStatus(id: UUID, status: PlayQueueStatus) {
         DatabaseManager.shared.updatePlayQueueStatus(id: id, status: status)
         notifyUpdate()

@@ -821,6 +821,27 @@ class DatabaseManager {
             sqlite3_finalize(stmt)
         }
     }
+
+    func removePlayQueueItem(id: UUID) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "DELETE FROM play_queue WHERE id = ?;"
+            var stmt: OpaquePointer?
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                let uuidString = id.uuidString as NSString
+                sqlite3_bind_text(stmt, 1, uuidString.utf8String, -1, nil)
+                
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    let errmsg = String(cString: sqlite3_errmsg(db))
+                    DebugLogger.shared.error("Error removing play queue item: \(errmsg)")
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
     
     // MARK: - Batch Management
     

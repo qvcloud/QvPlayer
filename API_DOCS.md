@@ -99,7 +99,7 @@ QvPlayer 提供了一个内置的 HTTP 服务器，允许你远程控制播放�
 - **播放**: `POST /api/v1/control/play`
 - **暂停**: `POST /api/v1/control/pause`
 - **切换播放/暂停**: `POST /api/v1/control/toggle`
-- **播放指定视频**: `POST /api/v1/control/play_video?index={index}`
+- **播放指定视频**: `POST /api/v1/control/play_video?id={uuid}`
 
 ### 快进/快退 (Seek)
 相对于当前位置快进或快退。
