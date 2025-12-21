@@ -519,12 +519,15 @@ struct WebAssets {
                 }
                 
                 function handleSortOrderChange(index, newOrder) {
+                    const order = parseInt(newOrder);
+                    if (isNaN(order)) return;
+                    
                     fetch('/api/v1/videos/sort', {
                         method: 'PUT',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
                             index: index,
-                            sortOrder: parseInt(newOrder)
+                            sortOrder: order
                         })
                     })
                     .then(res => res.json())
@@ -778,7 +781,14 @@ struct WebAssets {
                                         ${typeBadge}
                                         ${latencyBadge}
                                         <span class="badge">${escapeHtml(video.group || 'Default')}</span>
-                                        <span class="badge" style="background: #f0f0f0; color: #666;">Order: ${video.sortOrder || 0}</span>
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <span style="font-size: 11px; color: #888;">Order:</span>
+                                            <input type="number" 
+                                                   value="${video.sortOrder || 0}" 
+                                                   style="width: 60px; padding: 2px 4px; font-size: 11px; border: 1px solid #ddd; border-radius: 4px; margin: 0;"
+                                                   onchange="handleSortOrderChange(${index}, this.value)"
+                                                   onclick="event.stopPropagation()">
+                                        </div>
                                         <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
                                     </div>
                                 </div>

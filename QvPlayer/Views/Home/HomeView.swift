@@ -156,12 +156,15 @@ struct VideoListView: View {
                 Image(systemName: "ellipsis")
                     .font(.title3)
                     .foregroundStyle(.secondary)
-                    .padding(.trailing, 20)
+                    .padding(.horizontal, 20)
                     .padding(.vertical, 12)
                     .contentShape(Rectangle())
             }
+            .buttonStyle(.card) // Improve focus behavior
         }
         .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .padding(.bottom, 20)
     }
     
     private func videoItem(for video: Video) -> some View {
