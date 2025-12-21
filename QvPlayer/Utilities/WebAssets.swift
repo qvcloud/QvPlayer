@@ -6,6 +6,7 @@ struct WebAssets {
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
             <title>QvPlayer Manager</title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -773,7 +774,13 @@ struct WebAssets {
                         
                         li.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
-                                <div style="cursor: grab; color: #ccc; padding: 0 4px;">☰</div>
+                                <div style="cursor: grab; color: #ccc; padding: 0 4px; display: flex; align-items: center;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                                    </svg>
+                                </div>
                                 <input type="checkbox" class="video-checkbox" data-index="${index}" onchange="toggleSelection(${index}, this)" ${isSelected ? 'checked' : ''}>
                                 <div class="video-info">
                                     <div class="video-title">${escapeHtml(video.title)}</div>
