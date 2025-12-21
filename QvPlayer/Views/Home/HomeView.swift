@@ -116,6 +116,18 @@ struct VideoListView: View {
                     .foregroundStyle(.secondary)
                 Text("No videos found")
                     .foregroundStyle(.secondary)
+                
+                if let serverURL = WebServer.shared.serverURL {
+                    VStack(spacing: 8) {
+                        Text("You can import videos via the Web Console:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(serverURL)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.top, 20)
+                }
             }
             Spacer()
         }

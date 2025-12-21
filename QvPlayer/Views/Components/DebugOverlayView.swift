@@ -57,7 +57,7 @@ struct DebugOverlayView: View {
                                 StatRow(title: "Server", value: logger.videoStats.serverAddress)
                             }
                             GridRow {
-                                StatRow(title: "Status", value: logger.videoStats.isOnline ? "Online" : "Offline")
+                                StatRow(title: "Status", value: logger.videoStats.status)
                                 Color.clear
                             }
                         }

@@ -36,20 +36,9 @@ class HomeViewModel: ObservableObject {
         
         // Try to load from local storage first
         let localVideos = PlaylistManager.shared.getPlaylistVideos()
-        if !localVideos.isEmpty {
-            DebugLogger.shared.info("Loaded \(localVideos.count) videos from local storage")
-            self.videos = localVideos
-            self.groupVideos(localVideos)
-            return
-        }
+        DebugLogger.shared.info("Loaded \(localVideos.count) videos from local storage")
         
-        DebugLogger.shared.warning("No local playlist found, using sample videos")
-        // Fallback to sample videos if no local playlist
-        self.videos = [
-            Video(title: "CGTN Live", url: URL(string: "https://0472.org/hls/cgtn.m3u8")!, group: "Live Sources", isLive: true, description: "CGTN Live Stream"),
-            Video(title: "CCTV-13 News", url: URL(string: "http://ivi.bupt.edu.cn/hls/cctv13hd.m3u8")!, group: "Live Sources", isLive: true, description: "CCTV-13 News Live Stream"),
-            Video(title: "Big Buck Bunny", url: URL(string: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")!, group: "Movies", isLive: false, description: "Big Buck Bunny is a short computer-animated comedy film.")
-        ]
+        self.videos = localVideos
         self.groupVideos(self.videos)
     }
     

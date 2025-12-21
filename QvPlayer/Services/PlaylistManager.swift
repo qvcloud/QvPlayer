@@ -3,9 +3,9 @@ import Foundation
 class PlaylistManager: ObservableObject {
     static let shared = PlaylistManager()
     
+    // MARK: - Migration Logic
+    // We keep the old file paths just for migration purposes
     private let fileName = "playlist.m3u"
-    
-
     
     private var documentsURL: URL {
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -22,92 +22,69 @@ class PlaylistManager: ObservableObject {
         return caches.appendingPathComponent(fileName)
     }
     
-    // Dynamic file URL based on availability
-    private var fileURL: URL {
-        // Check where the file currently exists
+    private var legacyFileURL: URL? {
         if FileManager.default.fileExists(atPath: documentsURL.path) { return documentsURL }
         if FileManager.default.fileExists(atPath: appSupportURL.path) { return appSupportURL }
         if FileManager.default.fileExists(atPath: cachesURL.path) { return cachesURL }
-        
-        // Default for new file: Try Documents -> App Support -> Caches
-        return documentsURL
+        return nil
     }
     
-    func savePlaylist(content: String) throws {
-        // Try saving to Documents first
-        if (try? save(content: content, to: documentsURL)) != nil { return }
-        
-        // Try Application Support
-        if (try? save(content: content, to: appSupportURL)) != nil { return }
-        
-        // Fallback to Caches
-        try save(content: content, to: cachesURL)
+    init() {
+        migrateFromM3UIfNeeded()
     }
     
-    private func save(content: String, to url: URL) throws {
-        do {
-            // Ensure directory exists
-            let directory = url.deletingLastPathComponent()
-            if !FileManager.default.fileExists(atPath: directory.path) {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
-            }
-            
-            // Try to write
-            do {
-                try content.write(to: url, atomically: true, encoding: .utf8)
-            } catch {
-                DebugLogger.shared.error("Failed to write atomically to \(url.path): \(error)")
-                try content.write(to: url, atomically: false, encoding: .utf8)
-            }
-            
-            // Set file protection to none
-            try? (url as NSURL).setResourceValue(FileProtectionType.none, forKey: .fileProtectionKey)
-            
-            DebugLogger.shared.info("Playlist saved successfully to \(url.path)")
-            NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
-        } catch {
-            DebugLogger.shared.error("Error saving playlist to \(url.path): \(error)")
-            throw error
+    private func migrateFromM3UIfNeeded() {
+        let videos = DatabaseManager.shared.getAllVideos()
+        if !videos.isEmpty {
+            DebugLogger.shared.info("Database already has videos. Skipping migration.")
+            return
         }
-    }
-    
-    func loadPlaylist() -> String? {
-        let url = fileURL
-        guard FileManager.default.fileExists(atPath: url.path) else {
-            DebugLogger.shared.info("No existing playlist found")
-            return nil
+        
+        guard let url = legacyFileURL else {
+            DebugLogger.shared.info("No legacy M3U file found. Skipping migration.")
+            return
         }
+        
+        DebugLogger.shared.info("Migrating from M3U file at \(url.path)")
         
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
-            DebugLogger.shared.info("Playlist loaded successfully from \(url.path)")
-            return content
+            let m3uVideos = PlaylistService.shared.parseM3U(content: content)
+            
+            // Also fetch old metadata if available to preserve latency info
+            let metadata = DatabaseManager.shared.getAllMetadata()
+            
+            for (index, var video) in m3uVideos.enumerated() {
+                // Preserve sort order from M3U order
+                // We assign a sortOrder. Let's say higher is better.
+                // If we want the first item in M3U to be first in list, it should have highest sortOrder.
+                video.sortOrder = m3uVideos.count - index
+                
+                // Restore latency info
+                let urlString = video.url.absoluteString
+                if let data = metadata[urlString] {
+                    video.latency = data.0
+                    video.lastLatencyCheck = data.1
+                }
+                
+                DatabaseManager.shared.addVideo(video)
+            }
+            
+            DebugLogger.shared.info("Migration complete. \(m3uVideos.count) videos imported.")
+            
+            // Rename old file to .bak
+            let bakURL = url.appendingPathExtension("bak")
+            try? FileManager.default.moveItem(at: url, to: bakURL)
+            
         } catch {
-            DebugLogger.shared.error("Error loading playlist: \(error)")
-            return nil
+            DebugLogger.shared.error("Error during migration: \(error)")
         }
     }
     
+    // MARK: - Public API
+    
     func getPlaylistVideos() -> [Video] {
-        if let content = loadPlaylist() {
-            var videos = PlaylistService.shared.parseM3U(content: content)
-            
-            // Merge with SQLite metadata
-            let metadata = DatabaseManager.shared.getAllMetadata()
-            for i in 0..<videos.count {
-                let urlString = videos[i].url.absoluteString
-                if let data = metadata[urlString] {
-                    videos[i].latency = data.0
-                    videos[i].lastLatencyCheck = data.1
-                }
-            }
-            
-            // Sort by sortOrder descending (larger number = higher priority)
-            videos.sort { $0.sortOrder > $1.sortOrder }
-            
-            return videos
-        }
-        return []
+        return DatabaseManager.shared.getAllVideos()
     }
     
     func updateVideoSortOrder(at index: Int, newOrder: Int) throws {
@@ -116,16 +93,9 @@ class PlaylistManager: ObservableObject {
         
         var video = videos[index]
         video.sortOrder = newOrder
-        videos[index] = video
         
-        // Re-sort to ensure consistency before saving? 
-        // Or just save. The next load will sort.
-        // But generateM3U writes in array order.
-        // So we should sort the array before generating M3U if we want the file to reflect the order.
-        videos.sort { $0.sortOrder > $1.sortOrder }
-        
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        DatabaseManager.shared.updateVideo(video)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func appendVideo(title: String, url: String, group: String? = nil) throws {
@@ -135,7 +105,6 @@ class PlaylistManager: ObservableObject {
             DebugLogger.shared.error(error.localizedDescription)
             throw error
         }
-        var videos = getPlaylistVideos()
         
         let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
         let isLive = !isLocal
@@ -145,24 +114,25 @@ class PlaylistManager: ObservableObject {
             finalGroup = isLocal ? "Local Uploads" : "Live Sources"
         }
         
-        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive)
-        videos.append(newVideo)
+        // Calculate new sort order (lowest - 1 to append at end)
+        let videos = getPlaylistVideos()
+        let minSortOrder = videos.map { $0.sortOrder }.min() ?? 0
+        let newSortOrder = minSortOrder - 1
         
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive, sortOrder: newSortOrder)
+        DatabaseManager.shared.addVideo(newVideo)
+        
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func appendPlaylist(content: String, customGroupName: String? = nil) throws {
         DebugLogger.shared.info("Appending playlist content")
-        var videos = getPlaylistVideos()
         let newVideos = PlaylistService.shared.parseM3U(content: content)
         
-        // Update group for new videos if needed, or keep as is
-        // For imported playlists, we usually want to keep their groups or default to "Imported"
-        // But parseM3U already handles group-title.
+        let currentVideos = getPlaylistVideos()
+        var minSortOrder = currentVideos.map { $0.sortOrder }.min() ?? 0
         
-        // We should ensure isLive is set correctly for these
-        let processedVideos = newVideos.map { video -> Video in
+        for video in newVideos {
             var v = video
             // If it's http/https, it's likely live or remote
             if v.url.scheme?.hasPrefix("http") == true {
@@ -174,17 +144,44 @@ class PlaylistManager: ObservableObject {
             } else if v.group == nil || v.group?.isEmpty == true {
                 v.group = "Imported"
             }
-            return v
+            
+            minSortOrder -= 1
+            v.sortOrder = minSortOrder
+            
+            DatabaseManager.shared.addVideo(v)
         }
         
-        videos.append(contentsOf: processedVideos)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+    }
+    
+    func replacePlaylist(content: String) throws {
+        DebugLogger.shared.warning("Replacing entire playlist")
         
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        // 1. Clear existing data
+        DatabaseManager.shared.deleteAllVideos()
+        
+        // 2. Import new content
+        let newVideos = PlaylistService.shared.parseM3U(content: content)
+        
+        for (index, var video) in newVideos.enumerated() {
+            // Preserve order
+            video.sortOrder = newVideos.count - index
+            
+            if video.url.scheme?.hasPrefix("http") == true {
+                video.isLive = true
+            }
+            if video.group == nil || video.group?.isEmpty == true {
+                video.group = "Imported"
+            }
+            
+            DatabaseManager.shared.addVideo(video)
+        }
+        
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func deleteVideo(at index: Int) throws {
-        var videos = getPlaylistVideos()
+        let videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
             let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for deletion: \(index)"])
             DebugLogger.shared.error(error.localizedDescription)
@@ -197,13 +194,12 @@ class PlaylistManager: ObservableObject {
         CacheManager.shared.removeCachedVideo(url: video.url)
         CacheManager.shared.removeThumbnail(for: video.url)
         
-        videos.remove(at: index)
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        DatabaseManager.shared.deleteVideo(id: video.id)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func updateVideo(at index: Int, title: String, url: String, group: String? = nil) throws {
-        var videos = getPlaylistVideos()
+        let videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
             let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for update: \(index)"])
             DebugLogger.shared.error(error.localizedDescription)
@@ -217,6 +213,8 @@ class PlaylistManager: ObservableObject {
         
         DebugLogger.shared.info("Updating video at index \(index): \(title)")
         
+        var video = videos[index]
+        
         let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
         let isLive = !isLocal
         
@@ -225,32 +223,28 @@ class PlaylistManager: ObservableObject {
             finalGroup = isLocal ? "Local Uploads" : "Live Sources"
         }
         
-        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive)
-        videos[index] = newVideo
+        video.title = title
+        video.url = validURL
+        video.group = finalGroup
+        video.isLive = isLive
         
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        DatabaseManager.shared.updateVideo(video)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func deleteVideo(_ video: Video) {
-        var videos = getPlaylistVideos()
-        // Match by ID or URL if ID fails (for backward compatibility or if IDs are regenerated)
-        if let index = videos.firstIndex(where: { $0.id == video.id || $0.url == video.url }) {
-            DebugLogger.shared.info("Deleting video: \(video.title)")
-            
-            // Clear cache and thumbnail
-            CacheManager.shared.removeCachedVideo(url: video.url)
-            CacheManager.shared.removeThumbnail(for: video.url)
-            
-            videos.remove(at: index)
-            
-            let newContent = PlaylistService.shared.generateM3U(from: videos)
-            try? savePlaylist(content: newContent)
-        }
+        DebugLogger.shared.info("Deleting video: \(video.title)")
+        
+        // Clear cache and thumbnail
+        CacheManager.shared.removeCachedVideo(url: video.url)
+        CacheManager.shared.removeThumbnail(for: video.url)
+        
+        DatabaseManager.shared.deleteVideo(id: video.id)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func deleteGroup(_ groupName: String) {
-        var videos = getPlaylistVideos()
+        let videos = getPlaylistVideos()
         
         // Find videos in the group
         let videosToDelete = videos.filter { $0.group == groupName }
@@ -263,13 +257,10 @@ class PlaylistManager: ObservableObject {
              // Clear cache and thumbnail
              CacheManager.shared.removeCachedVideo(url: video.url)
              CacheManager.shared.removeThumbnail(for: video.url)
+             DatabaseManager.shared.deleteVideo(id: video.id)
         }
         
-        // Remove videos from the list
-        videos.removeAll { $0.group == groupName }
-        
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try? savePlaylist(content: newContent)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func clearAllData() {
@@ -278,20 +269,22 @@ class PlaylistManager: ObservableObject {
         // 1. Clear Cache
         CacheManager.shared.clearAllCache()
         
-        // 2. Delete Playlist Files (from all possible locations)
+        // 2. Clear Database
+        DatabaseManager.shared.deleteAllVideos()
+        
+        // 3. Delete Legacy Playlist Files (from all possible locations)
         try? FileManager.default.removeItem(at: documentsURL)
         try? FileManager.default.removeItem(at: appSupportURL)
         try? FileManager.default.removeItem(at: cachesURL)
         
-        // 3. Notify UI
+        // 4. Notify UI
         NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
 
     func deleteVideos(at indices: [Int]) throws {
-        var videos = getPlaylistVideos()
-        let sortedIndices = indices.sorted(by: >)
+        let videos = getPlaylistVideos()
         
-        for index in sortedIndices {
+        for index in indices {
             guard index >= 0 && index < videos.count else { continue }
             let video = videos[index]
             DebugLogger.shared.info("Deleting video: \(video.title)")
@@ -300,25 +293,22 @@ class PlaylistManager: ObservableObject {
             CacheManager.shared.removeCachedVideo(url: video.url)
             CacheManager.shared.removeThumbnail(for: video.url)
             
-            videos.remove(at: index)
+            DatabaseManager.shared.deleteVideo(id: video.id)
         }
         
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
     
     func updateVideosGroup(at indices: [Int], newGroup: String) throws {
-        var videos = getPlaylistVideos()
+        let videos = getPlaylistVideos()
         
         for index in indices {
             guard index >= 0 && index < videos.count else { continue }
             var video = videos[index]
             video.group = newGroup
-            videos[index] = video
+            DatabaseManager.shared.updateVideo(video)
         }
-        
-        let newContent = PlaylistService.shared.generateM3U(from: videos)
-        try savePlaylist(content: newContent)
+        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
     }
 }
 

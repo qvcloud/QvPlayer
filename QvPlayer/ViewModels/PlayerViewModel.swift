@@ -97,7 +97,23 @@ class PlayerViewModel: ObservableObject {
         self.errorMessage = nil
         
         // Use cached URL if available
-        let playURL = video.cachedURL ?? video.url
+        var playURL = video.cachedURL ?? video.url
+        
+        // Safety check: Resolve localcache:// scheme if it wasn't resolved earlier
+        if playURL.scheme == "localcache" {
+            // Try to extract filename from host or path
+            let rawFilename = playURL.host ?? playURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !rawFilename.isEmpty, let filename = rawFilename.removingPercentEncoding {
+                let fileURL = CacheManager.shared.getFileURL(filename: filename)
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    playURL = fileURL
+                    print("✅ [Player] Resolved localcache:// to \(playURL.path)")
+                } else {
+                    print("❌ [Player] Failed to resolve localcache:// - File not found: \(filename)")
+                }
+            }
+        }
+        
         print("📂 [Player] Playing from: \(playURL)")
         DebugLogger.shared.info("Playing from: \(playURL.lastPathComponent)")
         
@@ -253,7 +269,7 @@ class PlayerViewModel: ObservableObject {
                     DebugLogger.shared.info("Player Playing")
                     
                     var stats = DebugLogger.shared.videoStats
-                    stats.isOnline = true
+                    stats.status = "Online"
                     
                     // Update Server Address from Access Log
                     if let event = player.currentItem?.accessLog()?.events.last {

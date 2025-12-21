@@ -359,7 +359,7 @@ struct WebAssets {
                 
                 <div class="tabs">
                     <button class="tab-btn active" onclick="switchTab('playlist')">Playlist</button>
-                    <button class="tab-btn" onclick="switchTab('add')">Add Stream</button>
+                    <button class="tab-btn" onclick="switchTab('groups')">Groups</button>
                     <button class="tab-btn" onclick="switchTab('upload')">Upload</button>
                 </div>
                 
@@ -401,15 +401,13 @@ struct WebAssets {
                     </div>
                 </div>
                 
-                <div id="tab-add" class="tab-content" style="display: none;">
+                <div id="tab-groups" class="tab-content" style="display: none;">
                     <div class="card">
-                        <h2>Add New Stream</h2>
-                        <form id="addForm" onsubmit="handleAddStream(event)">
-                            <input type="text" name="title" placeholder="Channel Name (e.g. CCTV-1)" required>
-                            <input type="text" name="group" placeholder="Group (Optional)">
-                            <input type="text" name="url" placeholder="Stream URL (m3u8/mp4)" required>
-                            <button type="submit" class="btn">Add to Library</button>
-                        </form>
+                        <h2>Manage Groups</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 16px;">Deleting a group will remove all videos and cache within it.</p>
+                        <ul id="groupList" class="video-list">
+                            <!-- Groups loaded via JS -->
+                        </ul>
                     </div>
                 </div>
                 
@@ -428,8 +426,8 @@ struct WebAssets {
                     <div class="card">
                         <h2>Upload Local File</h2>
                         <div style="border: 2px dashed #d2d2d7; border-radius: 12px; padding: 40px; text-align: center; margin-bottom: 16px;">
-                            <input type="file" id="fileInput" style="display: none" onchange="handleFileSelect()">
-                            <button class="btn secondary" onclick="document.getElementById('fileInput').click()">Select Video File</button>
+                            <input type="file" id="fileInput" style="display: none" multiple onchange="handleFileSelect()">
+                            <button class="btn secondary" onclick="document.getElementById('fileInput').click()">Select Video Files</button>
                             <div id="fileName" style="margin-top: 12px; color: var(--secondary-text);"></div>
                         </div>
                         <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" style="margin-bottom: 16px;">
@@ -499,26 +497,6 @@ struct WebAssets {
                     }
                 }
                 
-                function handleAddStream(e) {
-                    e.preventDefault();
-                    const formData = new FormData(e.target);
-                    const data = Object.fromEntries(formData.entries());
-                    
-                    fetch('/api/v1/videos', {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify(data)
-                    })
-                    .then(res => res.json())
-                    .then(res => {
-                        if(res.success) {
-                            e.target.reset();
-                            switchTab('playlist');
-                            loadPlaylist();
-                        }
-                    });
-                }
-                
                 function handleSortOrderChange(index, newOrder) {
                     const order = parseInt(newOrder);
                     if (isNaN(order)) return;
@@ -540,21 +518,28 @@ struct WebAssets {
                 }
                 
                 function handleFileSelect() {
-                    const file = document.getElementById('fileInput').files[0];
-                    if (file) {
-                        document.getElementById('fileName').textContent = file.name;
+                    const files = document.getElementById('fileInput').files;
+                    if (files.length > 0) {
+                        if (files.length === 1) {
+                            document.getElementById('fileName').textContent = files[0].name;
+                        } else {
+                            document.getElementById('fileName').textContent = `${files.length} files selected`;
+                        }
                         document.getElementById('uploadBtn').disabled = false;
                     }
                 }
                 
                 function uploadFile() {
-                    const file = document.getElementById('fileInput').files[0];
-                    if (!file) return;
+                    const files = document.getElementById('fileInput').files;
+                    if (files.length === 0) return;
                     
                     const group = document.getElementById('uploadGroup').value.trim();
                     
                     const formData = new FormData();
-                    formData.append('file', file);
+                    for (let i = 0; i < files.length; i++) {
+                        formData.append('files[]', files[i]);
+                    }
+                    
                     if (group) {
                         formData.append('group', group);
                     }
@@ -692,11 +677,56 @@ struct WebAssets {
                             selectedIndices.clear();
                             updateBatchToolbar();
                             updateGroupFilter();
+                            loadGroups();
                             document.getElementById('selectAll').checked = false;
                             currentPage = 1;
                             renderPlaylist();
                         })
                         .catch(err => console.error('Failed to load playlist:', err));
+                }
+                
+                function loadGroups() {
+                    const groups = {};
+                    currentVideos.forEach(v => {
+                        const g = v.group || 'Default';
+                        if (!groups[g]) groups[g] = 0;
+                        groups[g]++;
+                    });
+                    
+                    const list = document.getElementById('groupList');
+                    list.innerHTML = '';
+                    
+                    Object.keys(groups).sort().forEach(group => {
+                        const count = groups[group];
+                        const li = document.createElement('li');
+                        li.className = 'video-item';
+                        li.innerHTML = `
+                            <div class="video-info">
+                                <div class="video-title">${escapeHtml(group)}</div>
+                                <div class="video-meta">${count} videos</div>
+                            </div>
+                            <button class="btn danger" style="width: auto; padding: 8px 16px;" onclick="deleteGroup('${escapeHtml(group)}')">Delete Group</button>
+                        `;
+                        list.appendChild(li);
+                    });
+                }
+                
+                function deleteGroup(group) {
+                    if (!confirm(`Are you sure you want to delete group "${group}" and all its videos? This cannot be undone.`)) return;
+                    
+                    fetch('/api/v1/groups', {
+                        method: 'DELETE',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ group: group })
+                    })
+                    .then(res => res.json())
+                    .then(res => {
+                        if (res.success) {
+                            loadPlaylist();
+                        } else {
+                            alert('Error: ' + (res.error || 'Unknown'));
+                        }
+                    });
                 }
 
                 function handleSearch(query) {

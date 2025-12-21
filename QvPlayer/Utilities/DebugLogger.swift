@@ -21,7 +21,7 @@ class DebugLogger: ObservableObject {
         var downloadSpeed: Double = 0.0
         var bufferDuration: Double = 0.0
         var serverAddress: String = "-"
-        var isOnline: Bool = false
+        var status: String = "-"
     }
     
     enum LogType {

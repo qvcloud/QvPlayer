@@ -192,7 +192,7 @@ struct KSPlayerView: UIViewRepresentable {
                 var currentBytes: Int64 = 0
                 
                 // Update Online Status
-                stats.isOnline = player.isPlaying || player.duration > 0
+                stats.status = (player.isPlaying || player.duration > 0) ? "Online" : "Offline"
                 stats.serverAddress = serverAddress
                 
                 if let dynamicInfo = player.dynamicInfo {

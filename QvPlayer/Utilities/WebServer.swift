@@ -265,6 +265,8 @@ class WebServer {
             handleBatchUpdateGroup(client: client, body: bodyString)
         } else if method == "PUT" && path == "/api/v1/videos/sort" {
             handleUpdateSortOrder(client: client, body: bodyString)
+        } else if method == "DELETE" && path == "/api/v1/groups" {
+            handleDeleteGroup(client: client, body: bodyString)
         }
         // MARK: - Control Endpoints
         else if method == "POST" && path.hasPrefix("/api/v1/control/") {
@@ -313,26 +315,11 @@ class WebServer {
                 m3uContent = String(decodedBody.dropFirst(9))
             }
             do {
-                try PlaylistManager.shared.savePlaylist(content: m3uContent)
+                try PlaylistManager.shared.replacePlaylist(content: m3uContent)
                 let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
                 sendResponse(client: client, body: successPage)
             } catch {
                 sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to save playlist: \(error.localizedDescription)")
-            }
-        } else if method == "POST" && path == "/add" {
-            // Legacy form support
-            let params = parseParams(bodyString)
-            if let title = params["title"], let url = params["url"] {
-                let group = params["group"]
-                do {
-                    try PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-                    let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
-                    sendResponse(client: client, body: successPage)
-                } catch {
-                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to add stream: \(error.localizedDescription)")
-                }
-            } else {
-                sendResponse(client: client, status: "400 Bad Request", body: "Missing title or url")
             }
         } else {
             sendResponse(client: client, status: "404 Not Found", body: "Not Found")
@@ -527,8 +514,7 @@ class WebServer {
             currentRange = nextBoundaryRange.upperBound..<body.endIndex
         }
         
-        var uploadedFileData: Data?
-        var uploadedFilename: String?
+        var uploadedFiles: [(filename: String, data: Data)] = []
         var uploadedGroup: String?
         
         let separator = "\r\n\r\n".data(using: .utf8)!
@@ -556,58 +542,70 @@ class WebServer {
                 if let filenameRange = headersString.range(of: "filename=\"") {
                     let afterFilename = headersString[filenameRange.upperBound...]
                     if let endQuote = afterFilename.firstIndex(of: "\"") {
-                        uploadedFilename = String(afterFilename[..<endQuote])
+                        let filename = String(afterFilename[..<endQuote])
+                        uploadedFiles.append((filename, contentData))
                     }
                 }
-                uploadedFileData = contentData
             } else if headersString.contains("name=\"group\"") {
                 // It's the group field
                 uploadedGroup = String(data: contentData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
         
-        guard let fileData = uploadedFileData, var filename = uploadedFilename else {
+        guard !uploadedFiles.isEmpty else {
             sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"No file uploaded\"}")
             return
         }
         
-        // Sanitize filename
-        filename = filename.replacingOccurrences(of: "/", with: "_")
-                           .replacingOccurrences(of: "\\", with: "_")
+        var successCount = 0
+        var errorMessages: [String] = []
         
-        // 3. Process File
-        if filename.lowercased().hasSuffix(".m3u") || filename.lowercased().hasSuffix(".m3u8") {
-            // Handle Playlist Import
-            if let content = String(data: fileData, encoding: .utf8) {
-                do {
-                    // Use uploaded group name if provided, otherwise use filename
-                    let groupName = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : (filename as NSString).deletingPathExtension
-                    try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
-                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Playlist imported successfully\"}")
-                } catch {
-                    sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import playlist: \(error.localizedDescription)\"}")
+        for (var filename, fileData) in uploadedFiles {
+            // Sanitize filename
+            filename = filename.replacingOccurrences(of: "/", with: "_")
+                               .replacingOccurrences(of: "\\", with: "_")
+            
+            // 3. Process File
+            if filename.lowercased().hasSuffix(".m3u") || filename.lowercased().hasSuffix(".m3u8") {
+                // Handle Playlist Import
+                if let content = String(data: fileData, encoding: .utf8) {
+                    do {
+                        // Use uploaded group name if provided, otherwise use filename
+                        let groupName = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : (filename as NSString).deletingPathExtension
+                        try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
+                        successCount += 1
+                    } catch {
+                        errorMessages.append("Failed to import playlist \(filename): \(error.localizedDescription)")
+                    }
+                } else {
+                    errorMessages.append("Invalid playlist encoding for \(filename)")
                 }
-            } else {
-                sendResponse(client: client, status: "400 Bad Request", contentType: "application/json", body: "{\"error\": \"Invalid playlist encoding\"}")
+                continue
             }
-            return
+            
+            // 4. Save File to Cache (for non-playlist files)
+            do {
+                let fileURL = try CacheManager.shared.saveUploadedFile(data: fileData, filename: filename)
+                
+                // 5. Add to Playlist
+                let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+                let localURLString = "localcache://\(encodedFilename)"
+                
+                let targetGroup = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : "Local Uploads"
+                
+                try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: targetGroup)
+                
+                successCount += 1
+            } catch {
+                errorMessages.append("Failed to save \(filename): \(error.localizedDescription)")
+            }
         }
         
-        // 4. Save File to Cache (for non-playlist files)
-        do {
-            let fileURL = try CacheManager.shared.saveUploadedFile(data: fileData, filename: filename)
-            
-            // 5. Add to Playlist
-            let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
-            let localURLString = "localcache://\(encodedFilename)"
-            
-            let targetGroup = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : "Local Uploads"
-            
-            try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: targetGroup)
-            
-            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"path\": \"\(fileURL.lastPathComponent)\"}")
-        } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to save file or playlist: \(error.localizedDescription)\"}")
+        if successCount > 0 {
+            let message = errorMessages.isEmpty ? "Successfully uploaded \(successCount) files" : "Uploaded \(successCount) files. Errors: \(errorMessages.joined(separator: "; "))"
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"\(message)\"}")
+        } else {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to upload files: \(errorMessages.joined(separator: "; "))\"}")
         }
     }
     
@@ -735,6 +733,18 @@ class WebServer {
         } catch {
             sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update sort order: \(error.localizedDescription)\"}")
         }
+    }
+    
+    private func handleDeleteGroup(client: Client, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let group = json["group"] as? String else {
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing group\"}")
+            return
+        }
+        
+        PlaylistManager.shared.deleteGroup(group)
+        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
     }
     
     // Helper to get IP Address
