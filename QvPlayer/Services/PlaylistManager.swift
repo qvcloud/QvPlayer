@@ -104,7 +104,7 @@ class PlaylistManager: ObservableObject {
         notifyUpdate()
     }
     
-    func appendVideo(title: String, url: String, group: String? = nil) throws {
+    func appendVideo(title: String, url: String, group: String? = nil, isLive: Bool? = nil) throws {
         DebugLogger.shared.info("Appending video: \(title)")
         guard let validURL = URL(string: url) else {
             let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for video: \(url)"])
@@ -113,7 +113,7 @@ class PlaylistManager: ObservableObject {
         }
         
         let isLocal = url.hasPrefix("localcache://") || validURL.isFileURL
-        let isLive = !isLocal
+        let finalIsLive = isLive ?? !isLocal
         
         var finalGroup = group
         if finalGroup == nil || finalGroup?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
@@ -125,7 +125,7 @@ class PlaylistManager: ObservableObject {
         let minSortOrder = videos.map { $0.sortOrder }.min() ?? 0
         let newSortOrder = minSortOrder - 1
         
-        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: isLive, sortOrder: newSortOrder)
+        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: finalIsLive, sortOrder: newSortOrder)
         DatabaseManager.shared.addVideo(newVideo)
         
         notifyUpdate()

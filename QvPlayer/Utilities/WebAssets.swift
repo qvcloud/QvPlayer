@@ -413,14 +413,27 @@ struct WebAssets {
                 
                 <div id="tab-upload" class="tab-content" style="display: none;">
                     <div class="card">
-                        <h2>Add Remote Source</h2>
-                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote M3U/M3U8 playlist.</p>
+                        <h2>Add Live</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a live stream (M3U8, etc).</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
-                            <input type="text" id="remoteUrl" placeholder="https://example.com/playlist.m3u" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                            <input type="text" id="remoteName" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="liveUrl" placeholder="http://example.com/live.m3u8" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="liveName" placeholder="Channel Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="liveGroup" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
                         </div>
-                        <button onclick="addRemoteSource()" class="btn" id="addRemoteBtn">Add Source</button>
-                        <div id="remoteStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
+                        <button onclick="addLive()" class="btn" id="addLiveBtn">Add Live Channel</button>
+                        <div id="liveStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
+                    </div>
+
+                    <div class="card">
+                        <h2>Add Remote File</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote video file (MP4, MKV, etc).</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <input type="text" id="remoteFileUrl" placeholder="http://example.com/video.mp4" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="remoteFileName" placeholder="Video Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="remoteFileGroup" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                        </div>
+                        <button onclick="addRemoteFile()" class="btn" id="addRemoteFileBtn">Add Remote File</button>
+                        <div id="remoteFileStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
 
                     <div class="card">
@@ -575,31 +588,35 @@ struct WebAssets {
                     });
                 }
 
-                function addRemoteSource() {
-                    const urlInput = document.getElementById('remoteUrl');
-                    const nameInput = document.getElementById('remoteName');
+                function addLive() {
+                    const urlInput = document.getElementById('liveUrl');
+                    const nameInput = document.getElementById('liveName');
+                    const groupInput = document.getElementById('liveGroup');
                     const url = urlInput.value.trim();
                     const name = nameInput.value.trim();
+                    const group = groupInput.value.trim();
                     
-                    if (!url) {
-                        alert('Please enter a URL');
+                    if (!url || !name) {
+                        alert('Please enter URL and Name');
                         return;
                     }
                     
-                    const statusDiv = document.getElementById('remoteStatus');
-                    const btn = document.getElementById('addRemoteBtn');
+                    const statusDiv = document.getElementById('liveStatus');
+                    const btn = document.getElementById('addLiveBtn');
                     
-                    statusDiv.textContent = 'Adding source...';
+                    statusDiv.textContent = 'Adding live channel...';
                     btn.disabled = true;
                     
-                    fetch('/api/v1/upload/remote', {
+                    fetch('/api/v1/videos', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
                             url: url,
-                            name: name || null
+                            title: name,
+                            group: group || 'Live Sources',
+                            isLive: true
                         })
                     })
                     .then(res => res.json())
@@ -609,6 +626,58 @@ struct WebAssets {
                             statusDiv.textContent = 'Success!';
                             urlInput.value = '';
                             nameInput.value = '';
+                            groupInput.value = '';
+                            switchTab('playlist');
+                            loadPlaylist();
+                        } else {
+                            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
+                        }
+                    })
+                    .catch(err => {
+                        btn.disabled = false;
+                        statusDiv.textContent = 'Error: ' + err;
+                    });
+                }
+
+                function addRemoteFile() {
+                    const urlInput = document.getElementById('remoteFileUrl');
+                    const nameInput = document.getElementById('remoteFileName');
+                    const groupInput = document.getElementById('remoteFileGroup');
+                    const url = urlInput.value.trim();
+                    const name = nameInput.value.trim();
+                    const group = groupInput.value.trim();
+                    
+                    if (!url || !name) {
+                        alert('Please enter URL and Name');
+                        return;
+                    }
+                    
+                    const statusDiv = document.getElementById('remoteFileStatus');
+                    const btn = document.getElementById('addRemoteFileBtn');
+                    
+                    statusDiv.textContent = 'Adding remote file...';
+                    btn.disabled = true;
+                    
+                    fetch('/api/v1/videos', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            title: name,
+                            group: group || 'Remote Files',
+                            isLive: false
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        btn.disabled = false;
+                        if (data.success) {
+                            statusDiv.textContent = 'Success!';
+                            urlInput.value = '';
+                            nameInput.value = '';
+                            groupInput.value = '';
                             switchTab('playlist');
                             loadPlaylist();
                         } else {
@@ -1149,7 +1218,8 @@ struct WebAssets {
         {
           "title": "Channel Name",
           "url": "http://...",
-          "group": "News"
+          "group": "News",
+          "isLive": true
         }
                 </pre>
             </div>

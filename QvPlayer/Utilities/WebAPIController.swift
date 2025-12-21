@@ -46,15 +46,17 @@ class WebAPIController {
     
     func handleAddVideo(body: String) -> (success: Bool, message: String?) {
         guard let data = body.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-              let title = json["title"],
-              let url = json["url"] else {
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let title = json["title"] as? String,
+              let url = json["url"] as? String else {
             return (false, "Invalid JSON or missing fields")
         }
         
-        let group = json["group"]
+        let group = json["group"] as? String
+        let isLive = json["isLive"] as? Bool
+        
         do {
-            try PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
+            try PlaylistManager.shared.appendVideo(title: title, url: url, group: group, isLive: isLive)
             return (true, nil)
         } catch {
             return (false, "Failed to add video: \(error.localizedDescription)")
