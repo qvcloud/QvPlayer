@@ -115,6 +115,8 @@ class DatabaseManager {
         }
         sqlite3_finalize(createTableStatement)
         
+        migrateSchema()
+        
         // Migration: Rename videos to library if it exists and library is empty
         // Or just check if videos exists and rename it?
         // Simple check: try to select from videos. If success, and library is empty, move data?
@@ -147,6 +149,32 @@ class DatabaseManager {
             }
         }
         sqlite3_finalize(checkStmt)
+    }
+    
+    private func migrateSchema() {
+        guard let db = db else { return }
+        
+        let columns = [
+            ("group_name", "TEXT"),
+            ("is_live", "INTEGER DEFAULT 0"),
+            ("description", "TEXT"),
+            ("thumbnail_url", "TEXT"),
+            ("cached_url", "TEXT"),
+            ("latency", "REAL"),
+            ("last_check", "REAL"),
+            ("sort_order", "INTEGER DEFAULT 0")
+        ]
+        
+        for (name, type) in columns {
+            let sql = "ALTER TABLE library ADD COLUMN \(name) \(type);"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                if sqlite3_step(stmt) == SQLITE_DONE {
+                    DebugLogger.shared.info("📝 [SQL] Added column \(name) to library table")
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
     }
     
     func addVideo(_ video: Video) {

@@ -639,13 +639,17 @@ class WebServer {
                 DispatchQueue.main.async {
                     do {
                         try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
-                        self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
+                        self.queue.async {
+                            self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
+                        }
                     } catch {
-                        self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import remote playlist: \(error.localizedDescription)\"}")
+                        self.queue.async {
+                            self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import remote playlist: \(error.localizedDescription)\"}")
+                        }
                     }
                 }
             } catch {
-                DispatchQueue.main.async {
+                self.queue.async {
                     self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to download remote playlist: \(error.localizedDescription)\"}")
                 }
             }
@@ -672,14 +676,39 @@ class WebServer {
         Content-Type: \(contentType)\r
         Content-Length: \(body.utf8.count)\r
         Connection: close\r
+        Cache-Control: no-cache, no-store, must-revalidate\r
+        Pragma: no-cache\r
+        Expires: 0\r
         \r
         \(body)
         """
         
         if let data = response.data(using: .utf8) {
             data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
-                if let baseAddress = buffer.baseAddress {
-                    write(client.fd, baseAddress, data.count)
+                guard let baseAddress = buffer.baseAddress else { return }
+                
+                var offset = 0
+                let total = data.count
+                
+                while offset < total {
+                    let remaining = total - offset
+                    let written = write(client.fd, baseAddress.advanced(by: offset), remaining)
+                    
+                    if written < 0 {
+                        if errno == EAGAIN || errno == EWOULDBLOCK {
+                            var pfd = pollfd(fd: client.fd, events: Int16(POLLOUT), revents: 0)
+                            let ret = poll(&pfd, 1, 5000) // 5s timeout
+                            if ret <= 0 {
+                                print("Write timeout or poll error")
+                                break
+                            }
+                        } else {
+                            print("Write failed: \(String(cString: strerror(errno)))")
+                            break
+                        }
+                    } else {
+                        offset += written
+                    }
                 }
             }
         }
