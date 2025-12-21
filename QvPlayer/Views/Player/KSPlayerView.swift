@@ -165,6 +165,7 @@ struct KSPlayerView: UIViewRepresentable {
             // Update Debug Stats
             Task { @MainActor in
                 var stats = DebugLogger.shared.videoStats
+                stats.url = playerLayer.url.absoluteString
                 let size = player.naturalSize
                 stats.resolution = "\(Int(size.width))x\(Int(size.height))"
                 stats.bufferDuration = max(0, player.playableTime - player.currentPlaybackTime)

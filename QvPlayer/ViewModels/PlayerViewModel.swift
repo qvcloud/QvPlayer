@@ -94,6 +94,11 @@ class PlayerViewModel: ObservableObject {
         print("📂 [Player] Playing from: \(playURL)")
         DebugLogger.shared.info("Playing from: \(playURL.lastPathComponent)")
         
+        // Update Debug Stats URL
+        var stats = DebugLogger.shared.videoStats
+        stats.url = playURL.absoluteString
+        DebugLogger.shared.videoStats = stats
+        
         let unsupportedExtensions = ["mkv", "avi", "flv", "wmv", "rmvb", "webm"]
         if playURL.pathExtension.lowercased() != "" && unsupportedExtensions.contains(playURL.pathExtension.lowercased()) {
             let msg = "⚠️ Format '.\(playURL.pathExtension)' is not supported by native player."

@@ -325,6 +325,9 @@ struct WebAssets {
                                 <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
                                 <button class="filter-btn" id="filter-local" onclick="setFilter('local')">Local</button>
                                 <button class="filter-btn" id="filter-live" onclick="setFilter('live')">Live</button>
+                                <select id="groupFilter" onchange="renderPlaylist()" style="margin-left: 4px; padding: 4px 8px; border-radius: 6px; border: none; background: none; font-size: 13px; color: var(--text-color); cursor: pointer;">
+                                    <option value="all">All Groups</option>
+                                </select>
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <div id="batchToolbar" style="display: none; gap: 8px;">
@@ -577,6 +580,33 @@ struct WebAssets {
                     renderPlaylist();
                 }
 
+                function updateGroupFilter() {
+                    const select = document.getElementById('groupFilter');
+                    const currentSelection = select.value;
+                    
+                    // Get unique groups
+                    const groups = new Set();
+                    currentVideos.forEach(v => {
+                        if (v.group) groups.add(v.group);
+                    });
+                    
+                    // Save current selection if it still exists, otherwise default to 'all'
+                    const shouldKeepSelection = groups.has(currentSelection);
+                    
+                    select.innerHTML = '<option value="all">All Groups</option>';
+                    
+                    Array.from(groups).sort().forEach(group => {
+                        const option = document.createElement('option');
+                        option.value = group;
+                        option.textContent = group;
+                        select.appendChild(option);
+                    });
+                    
+                    if (shouldKeepSelection) {
+                        select.value = currentSelection;
+                    }
+                }
+
                 function loadPlaylist() {
                     fetch('/api/v1/playlist')
                         .then(res => res.json())
@@ -588,6 +618,7 @@ struct WebAssets {
                             currentVideos = data;
                             selectedIndices.clear();
                             updateBatchToolbar();
+                            updateGroupFilter();
                             document.getElementById('selectAll').checked = false;
                             renderPlaylist();
                         })
@@ -598,12 +629,16 @@ struct WebAssets {
                     const list = document.getElementById('playlist');
                     list.innerHTML = '';
                     
+                    const groupFilter = document.getElementById('groupFilter').value;
+                    
                     currentVideos.forEach((video, index) => {
                         // Robust check for isLive
                         const isLive = video.isLive === true;
                         
                         if (currentFilter === 'local' && isLive) return;
                         if (currentFilter === 'live' && !isLive) return;
+                        
+                        if (groupFilter !== 'all' && video.group !== groupFilter) return;
                         
                         const isSelected = selectedIndices.has(index);
                         const typeBadge = isLive 

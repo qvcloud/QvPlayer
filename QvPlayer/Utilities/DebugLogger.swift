@@ -12,6 +12,7 @@ class DebugLogger: ObservableObject {
     }
     
     struct VideoStats {
+        var url: String = "-"
         var resolution: String = "-"
         var fps: Double = 0.0
         var bitrate: Double = 0.0

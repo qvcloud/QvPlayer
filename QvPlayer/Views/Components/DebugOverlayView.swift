@@ -31,6 +31,16 @@ struct DebugOverlayView: View {
                         
                         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 2) {
                             GridRow {
+                                Text("URL")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.gray)
+                                Text(logger.videoStats.url)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            GridRow {
                                 StatRow(title: "Resolution", value: logger.videoStats.resolution)
                                 StatRow(title: "FPS", value: String(format: "%.1f", logger.videoStats.fps))
                             }
