@@ -26,6 +26,7 @@ class PlaylistService {
         var currentGroup: String?
         var currentLatency: Double?
         var currentLastCheck: Date?
+        var currentSortOrder: Int = 0
         
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -98,15 +99,20 @@ class PlaylistService {
                          cachedURL = CacheManager.shared.isCached(remoteURL: validURL) ? CacheManager.shared.getCachedFileURL(for: validURL) : nil
                     }
                     
-                    videos.append(Video(title: title, url: validURL, group: currentGroup, isLive: isLive, cachedURL: cachedURL, latency: currentLatency, lastLatencyCheck: currentLastCheck))
+                    videos.append(Video(title: title, url: validURL, group: currentGroup, isLive: isLive, cachedURL: cachedURL, latency: currentLatency, lastLatencyCheck: currentLastCheck, sortOrder: currentSortOrder))
                     currentTitle = nil
                     currentGroup = nil
                     currentLatency = nil
                     currentLastCheck = nil
+                    currentSortOrder = 0
+                }
+            } else if trimmedLine.hasPrefix("#QV-ORDER:") {
+                if let val = Int(trimmedLine.dropFirst("#QV-ORDER:".count).trimmingCharacters(in: .whitespaces)) {
+                    currentSortOrder = val
                 }
             }
-        DebugLogger.shared.info("Parsed \(videos.count) videos from M3U")
         }
+        DebugLogger.shared.info("Parsed \(videos.count) videos from M3U")
         
         return videos
     }
@@ -128,6 +134,9 @@ class PlaylistService {
             }
             if let lastCheck = video.lastLatencyCheck {
                 content += "#QV-LAST-CHECK:\(lastCheck.timeIntervalSince1970)\n"
+            }
+            if video.sortOrder != 0 {
+                content += "#QV-ORDER: \(video.sortOrder)\n"
             }
             
             var urlString = video.url.absoluteString

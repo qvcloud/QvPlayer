@@ -263,6 +263,8 @@ class WebServer {
             handleBatchDeleteVideo(client: client, body: bodyString)
         } else if method == "PUT" && path == "/api/v1/videos/batch/group" {
             handleBatchUpdateGroup(client: client, body: bodyString)
+        } else if method == "PUT" && path == "/api/v1/videos/sort" {
+            handleUpdateSortOrder(client: client, body: bodyString)
         }
         // MARK: - Control Endpoints
         else if method == "POST" && path.hasPrefix("/api/v1/control/") {
@@ -348,7 +350,8 @@ class WebServer {
                 "title": video.title,
                 "url": video.url.absoluteString,
                 "group": video.group ?? "",
-                "isLive": video.isLive
+                "isLive": video.isLive,
+                "sortOrder": video.sortOrder
             ]
             
             if let latency = video.latency {
@@ -714,6 +717,23 @@ class WebServer {
             sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
         } catch {
             sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update videos: \(error.localizedDescription)\"}")
+        }
+    }
+    
+    private func handleUpdateSortOrder(client: Client, body: String) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let index = json["index"] as? Int,
+              let newOrder = json["sortOrder"] as? Int else {
+            sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Invalid JSON or missing fields\"}")
+            return
+        }
+        
+        do {
+            try PlaylistManager.shared.updateVideoSortOrder(at: index, newOrder: newOrder)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update sort order: \(error.localizedDescription)\"}")
         }
     }
     

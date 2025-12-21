@@ -101,9 +101,31 @@ class PlaylistManager: ObservableObject {
                     videos[i].lastLatencyCheck = data.1
                 }
             }
+            
+            // Sort by sortOrder descending (larger number = higher priority)
+            videos.sort { $0.sortOrder > $1.sortOrder }
+            
             return videos
         }
         return []
+    }
+    
+    func updateVideoSortOrder(at index: Int, newOrder: Int) throws {
+        var videos = getPlaylistVideos()
+        guard index >= 0 && index < videos.count else { return }
+        
+        var video = videos[index]
+        video.sortOrder = newOrder
+        videos[index] = video
+        
+        // Re-sort to ensure consistency before saving? 
+        // Or just save. The next load will sort.
+        // But generateM3U writes in array order.
+        // So we should sort the array before generating M3U if we want the file to reflect the order.
+        videos.sort { $0.sortOrder > $1.sortOrder }
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try savePlaylist(content: newContent)
     }
     
     func appendVideo(title: String, url: String, group: String? = nil) throws {
