@@ -5,31 +5,82 @@ class PlaylistManager: ObservableObject {
     
     private let fileName = "playlist.m3u"
     
-    private var fileURL: URL {
+
+    
+    private var documentsURL: URL {
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         return documentsDirectory.appendingPathComponent(fileName)
     }
     
-    func savePlaylist(content: String) {
+    private var appSupportURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent(fileName)
+    }
+    
+    private var cachesURL: URL {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return caches.appendingPathComponent(fileName)
+    }
+    
+    // Dynamic file URL based on availability
+    private var fileURL: URL {
+        // Check where the file currently exists
+        if FileManager.default.fileExists(atPath: documentsURL.path) { return documentsURL }
+        if FileManager.default.fileExists(atPath: appSupportURL.path) { return appSupportURL }
+        if FileManager.default.fileExists(atPath: cachesURL.path) { return cachesURL }
+        
+        // Default for new file: Try Documents -> App Support -> Caches
+        return documentsURL
+    }
+    
+    func savePlaylist(content: String) throws {
+        // Try saving to Documents first
+        if (try? save(content: content, to: documentsURL)) != nil { return }
+        
+        // Try Application Support
+        if (try? save(content: content, to: appSupportURL)) != nil { return }
+        
+        // Fallback to Caches
+        try save(content: content, to: cachesURL)
+    }
+    
+    private func save(content: String, to url: URL) throws {
         do {
-            try content.write(to: fileURL, atomically: true, encoding: .utf8)
-            DebugLogger.shared.info("Playlist saved successfully")
-            // Post notification or update observable to reload
+            // Ensure directory exists
+            let directory = url.deletingLastPathComponent()
+            if !FileManager.default.fileExists(atPath: directory.path) {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+            }
+            
+            // Try to write
+            do {
+                try content.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                DebugLogger.shared.error("Failed to write atomically to \(url.path): \(error)")
+                try content.write(to: url, atomically: false, encoding: .utf8)
+            }
+            
+            // Set file protection to none
+            try? (url as NSURL).setResourceValue(FileProtectionType.none, forKey: .fileProtectionKey)
+            
+            DebugLogger.shared.info("Playlist saved successfully to \(url.path)")
             NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
         } catch {
-            DebugLogger.shared.error("Error saving playlist: \(error)")
+            DebugLogger.shared.error("Error saving playlist to \(url.path): \(error)")
+            throw error
         }
     }
     
     func loadPlaylist() -> String? {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        let url = fileURL
+        guard FileManager.default.fileExists(atPath: url.path) else {
             DebugLogger.shared.info("No existing playlist found")
             return nil
         }
         
         do {
-            let content = try String(contentsOf: fileURL, encoding: .utf8)
-            DebugLogger.shared.info("Playlist loaded successfully")
+            let content = try String(contentsOf: url, encoding: .utf8)
+            DebugLogger.shared.info("Playlist loaded successfully from \(url.path)")
             return content
         } catch {
             DebugLogger.shared.error("Error loading playlist: \(error)")
@@ -44,11 +95,12 @@ class PlaylistManager: ObservableObject {
         return []
     }
     
-    func appendVideo(title: String, url: String, group: String? = nil) {
+    func appendVideo(title: String, url: String, group: String? = nil) throws {
         DebugLogger.shared.info("Appending video: \(title)")
         guard let validURL = URL(string: url) else {
-            DebugLogger.shared.error("Invalid URL for video: \(url)")
-            return
+            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for video: \(url)"])
+            DebugLogger.shared.error(error.localizedDescription)
+            throw error
         }
         var videos = getPlaylistVideos()
         let isLive = !validURL.isFileURL
@@ -56,14 +108,15 @@ class PlaylistManager: ObservableObject {
         videos.append(newVideo)
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
-        savePlaylist(content: newContent)
+        try savePlaylist(content: newContent)
     }
     
-    func deleteVideo(at index: Int) {
+    func deleteVideo(at index: Int) throws {
         var videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
-            DebugLogger.shared.error("Invalid index for deletion: \(index)")
-            return
+            let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for deletion: \(index)"])
+            DebugLogger.shared.error(error.localizedDescription)
+            throw error
         }
         let video = videos[index]
         DebugLogger.shared.info("Deleting video: \(video.title)")
@@ -74,25 +127,29 @@ class PlaylistManager: ObservableObject {
         
         videos.remove(at: index)
         let newContent = PlaylistService.shared.generateM3U(from: videos)
-        savePlaylist(content: newContent)
+        try savePlaylist(content: newContent)
     }
     
-    func updateVideo(at index: Int, title: String, url: String, group: String? = nil) {
+    func updateVideo(at index: Int, title: String, url: String, group: String? = nil) throws {
         var videos = getPlaylistVideos()
         guard index >= 0 && index < videos.count else {
-            DebugLogger.shared.error("Invalid index for update: \(index)")
-            return
+            let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for update: \(index)"])
+            DebugLogger.shared.error(error.localizedDescription)
+            throw error
         }
         guard let validURL = URL(string: url) else {
-            DebugLogger.shared.error("Invalid URL for update: \(url)")
-            return
+            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for update: \(url)"])
+            DebugLogger.shared.error(error.localizedDescription)
+            throw error
         }
         
         DebugLogger.shared.info("Updating video at index \(index): \(title)")
-        var video = videos[index]
+        let isLive = !validURL.isFileURL
+        let newVideo = Video(title: title, url: validURL, group: group, isLive: isLive)
+        videos[index] = newVideo
         
         let newContent = PlaylistService.shared.generateM3U(from: videos)
-        savePlaylist(content: newContent)
+        try savePlaylist(content: newContent)
     }
 }
 

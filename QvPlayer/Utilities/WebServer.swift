@@ -275,8 +275,12 @@ class WebServer {
             // Legacy form support
             let params = parseParams(bodyString)
             if let indexStr = params["index"], let index = Int(indexStr) {
-                PlaylistManager.shared.deleteVideo(at: index)
-                sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+                do {
+                    try PlaylistManager.shared.deleteVideo(at: index)
+                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+                } catch {
+                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to delete video: \(error.localizedDescription)")
+                }
             } else {
                 sendResponse(client: client, status: "400 Bad Request", body: "Missing index")
             }
@@ -286,8 +290,12 @@ class WebServer {
             if let indexStr = params["index"], let index = Int(indexStr),
                let title = params["title"], let url = params["url"] {
                 let group = params["group"]
-                PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-                sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+                do {
+                    try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
+                    sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+                } catch {
+                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to update video: \(error.localizedDescription)")
+                }
             } else {
                 sendResponse(client: client, status: "400 Bad Request", body: "Missing parameters")
             }
@@ -298,17 +306,25 @@ class WebServer {
             if decodedBody.hasPrefix("playlist=") {
                 m3uContent = String(decodedBody.dropFirst(9))
             }
-            PlaylistManager.shared.savePlaylist(content: m3uContent)
-            let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
-            sendResponse(client: client, body: successPage)
+            do {
+                try PlaylistManager.shared.savePlaylist(content: m3uContent)
+                let successPage = "<html><body><h1>Playlist Replaced!</h1><a href='/'>Back</a></body></html>"
+                sendResponse(client: client, body: successPage)
+            } catch {
+                sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to save playlist: \(error.localizedDescription)")
+            }
         } else if method == "POST" && path == "/add" {
             // Legacy form support
             let params = parseParams(bodyString)
             if let title = params["title"], let url = params["url"] {
                 let group = params["group"]
-                PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-                let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
-                sendResponse(client: client, body: successPage)
+                do {
+                    try PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
+                    let successPage = "<html><body><h1>Stream Added!</h1><a href='/'>Back</a></body></html>"
+                    sendResponse(client: client, body: successPage)
+                } catch {
+                    sendResponse(client: client, status: "500 Internal Server Error", body: "Failed to add stream: \(error.localizedDescription)")
+                }
             } else {
                 sendResponse(client: client, status: "400 Bad Request", body: "Missing title or url")
             }
@@ -349,8 +365,12 @@ class WebServer {
         }
         
         let group = json["group"]
-        PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        do {
+            try PlaylistManager.shared.appendVideo(title: title, url: url, group: group)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to add video: \(error.localizedDescription)\"}")
+        }
     }
     
     private func handleDeleteVideo(client: Client, queryItems: [URLQueryItem]) {
@@ -360,8 +380,12 @@ class WebServer {
             return
         }
         
-        PlaylistManager.shared.deleteVideo(at: index)
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        do {
+            try PlaylistManager.shared.deleteVideo(at: index)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to delete video: \(error.localizedDescription)\"}")
+        }
     }
     
     private func handleUpdateVideo(client: Client, queryItems: [URLQueryItem], body: String) {
@@ -380,21 +404,29 @@ class WebServer {
         }
         
         let group = json["group"]
-        PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        do {
+            try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group)
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to update video: \(error.localizedDescription)\"}")
+        }
     }
     
     private func handleReplacePlaylist(client: Client, body: String) {
         // Check if body is JSON or raw M3U
-        if let data = body.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-           let content = json["content"] {
-            PlaylistManager.shared.savePlaylist(content: content)
-        } else {
-            // Assume raw text
-            PlaylistManager.shared.savePlaylist(content: body)
+        do {
+            if let data = body.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+               let content = json["content"] {
+                try PlaylistManager.shared.savePlaylist(content: content)
+            } else {
+                // Assume raw text
+                try PlaylistManager.shared.savePlaylist(content: body)
+            }
+            sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
+        } catch {
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to replace playlist: \(error.localizedDescription)\"}")
         }
-        sendResponse(client: client, contentType: "application/json", body: "{\"success\": true}")
     }
     
     private func handleControl(client: Client, path: String, queryItems: [URLQueryItem]) {
@@ -527,12 +559,13 @@ class WebServer {
             
             // 4. Add to Playlist
             // Use a custom scheme to persist local file references across app launches
-            let localURLString = "localcache://\(filename)"
-            PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: "Local Uploads")
+            let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+            let localURLString = "localcache://\(encodedFilename)"
+            try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: "Local Uploads")
             
             sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"path\": \"\(fileURL.lastPathComponent)\"}")
         } catch {
-            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to save file: \(error)\"}")
+            sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to save file or playlist: \(error.localizedDescription)\"}")
         }
     }
     

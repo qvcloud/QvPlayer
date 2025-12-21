@@ -54,7 +54,8 @@ class PlaylistService {
                 // Handle custom localcache scheme
                 var finalURL: URL?
                 if trimmedLine.hasPrefix("localcache://") {
-                    let filename = String(trimmedLine.dropFirst("localcache://".count))
+                    let rawFilename = String(trimmedLine.dropFirst("localcache://".count))
+                    let filename = rawFilename.removingPercentEncoding ?? rawFilename
                     finalURL = CacheManager.shared.getFileURL(filename: filename)
                 } else {
                     finalURL = URL(string: trimmedLine)
@@ -115,7 +116,8 @@ class PlaylistService {
                 let expectedCacheURL = CacheManager.shared.getFileURL(filename: filename)
                 // Compare paths to handle potential scheme differences (file://)
                 if video.url.path == expectedCacheURL.path {
-                    urlString = "localcache://\(filename)"
+                    let encodedFilename = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
+                    urlString = "localcache://\(encodedFilename)"
                 }
             }
             
