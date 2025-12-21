@@ -449,7 +449,9 @@ class WebServer {
         case "play_video":
             if let indexStr = queryItems.first(where: { $0.name == "index" })?.value,
                let index = Int(indexStr) {
-                NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["index": index])
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["index": index])
+                }
             }
         default:
             sendResponse(client: client, status: "400 Bad Request", body: "{\"error\": \"Unknown action\"}")

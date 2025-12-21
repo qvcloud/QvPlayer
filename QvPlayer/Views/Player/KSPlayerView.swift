@@ -21,7 +21,21 @@ struct KSPlayerView: UIViewRepresentable {
         let options = createOptions()
         
         // Use cached URL if available, otherwise use remote URL
-        let targetURL = video.cachedURL ?? video.url
+        var targetURL = video.cachedURL ?? video.url
+        
+        // Resolve localcache:// scheme
+        if targetURL.scheme == "localcache" {
+             let rawFilename = targetURL.host ?? targetURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+             if !rawFilename.isEmpty, let filename = rawFilename.removingPercentEncoding {
+                 let fileURL = CacheManager.shared.getFileURL(filename: filename)
+                 if FileManager.default.fileExists(atPath: fileURL.path) {
+                     targetURL = fileURL
+                     print("✅ [KSPlayerView] Resolved localcache:// to \(targetURL.path)")
+                 } else {
+                     print("❌ [KSPlayerView] Failed to resolve localcache:// - File not found: \(filename)")
+                 }
+             }
+        }
         
         if let url = URL(string: targetURL.absoluteString) {
             let playerLayer = KSPlayerLayer(url: url, options: options)
@@ -48,7 +62,19 @@ struct KSPlayerView: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         #if canImport(KSPlayer)
         if let playerLayer = context.coordinator.playerLayer {
-            let targetURL = video.cachedURL ?? video.url
+            var targetURL = video.cachedURL ?? video.url
+            
+            // Resolve localcache:// scheme
+            if targetURL.scheme == "localcache" {
+                 let rawFilename = targetURL.host ?? targetURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                 if !rawFilename.isEmpty, let filename = rawFilename.removingPercentEncoding {
+                     let fileURL = CacheManager.shared.getFileURL(filename: filename)
+                     if FileManager.default.fileExists(atPath: fileURL.path) {
+                         targetURL = fileURL
+                     }
+                 }
+            }
+            
             if playerLayer.url.absoluteString != targetURL.absoluteString {
                 let options = createOptions()
                 playerLayer.set(url: targetURL, options: options)
@@ -68,6 +94,10 @@ struct KSPlayerView: UIViewRepresentable {
         options.cache = true
         // Increase buffer size to avoid stuttering on network videos
         options.maxBufferDuration = 20 
+        
+        // Enable detailed logging
+        options.setShowDebugLog(true)
+        
         return options
     }
     #endif
@@ -185,6 +215,22 @@ struct KSPlayerView: UIViewRepresentable {
                 if let track = player.tracks(mediaType: .video).first(where: { $0.isEnabled }) {
                      stats.codec = track.description
                      stats.bitrate = Double(track.bitRate)
+                }
+                
+                // Detailed Stream Info Logging
+                if let dynamicInfo = player.dynamicInfo {
+                    currentBytes = dynamicInfo.bytesRead
+                    let debugInfo = """
+                    [Stream Info]
+                    Bytes Read: \(dynamicInfo.bytesRead)
+                    Buffer Time: \(String(format: "%.2f", player.playableTime - player.currentPlaybackTime))s
+                    Video Width: \(dynamicInfo.videoWidth)
+                    Video Height: \(dynamicInfo.videoHeight)
+                    Frame Rate: \(String(format: "%.2f", dynamicInfo.frameRate))
+                    Bitrate: \(String(format: "%.2f", dynamicInfo.bitRate / 1000)) kbps
+                    Decode FPS: \(String(format: "%.2f", dynamicInfo.decodeFrameRate))
+                    """
+                    DebugLogger.shared.info(debugInfo)
                 }
                 
                 // Calculate Download Speed

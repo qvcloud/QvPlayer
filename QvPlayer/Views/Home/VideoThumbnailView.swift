@@ -44,8 +44,23 @@ struct VideoThumbnailView: View {
         
         DebugLogger.shared.info("Generating thumbnail for: \(url.lastPathComponent)")
         
+        // Resolve localcache:// URL
+        var targetURL = url
+        if url.scheme == "localcache" {
+            let rawFilename = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if !rawFilename.isEmpty, let filename = rawFilename.removingPercentEncoding {
+                let fileURL = CacheManager.shared.getFileURL(filename: filename)
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    targetURL = fileURL
+                    print("✅ [Thumbnail] Resolved localcache:// to \(targetURL.path)")
+                } else {
+                    print("❌ [Thumbnail] Failed to resolve localcache:// - File not found: \(filename)")
+                }
+            }
+        }
+        
         // 1. Try AVAssetImageGenerator first (Fastest, Native)
-        let asset = AVURLAsset(url: url)
+        let asset = AVURLAsset(url: targetURL)
         
         // Optimization: Don't decode full resolution for thumbnails
         let generator = AVAssetImageGenerator(asset: asset)
@@ -72,11 +87,11 @@ struct VideoThumbnailView: View {
             }
         } catch {
             DebugLogger.shared.warning("AVAssetImageGenerator failed for \(url.lastPathComponent): \(error.localizedDescription). Retrying with KSPlayer...")
-            await generateThumbnailWithFFmpeg()
+            await generateThumbnailWithFFmpeg(url: targetURL)
         }
     }
 
-    private func generateThumbnailWithFFmpeg() async {
+    private func generateThumbnailWithFFmpeg(url: URL) async {
         #if canImport(KSPlayer)
         DebugLogger.shared.info("Attempting KSPlayer fallback for: \(url.absoluteString)")
         // Use KSPlayer's ThumbnailController
@@ -89,7 +104,7 @@ struct VideoThumbnailView: View {
                     self.isLoading = false
                     // Save to cache
                     if let image = self.image {
-                        CacheManager.shared.saveThumbnail(image: image, for: url)
+                        CacheManager.shared.saveThumbnail(image: image, for: self.url)
                     }
                 }
                 DebugLogger.shared.info("KSPlayer thumbnail success for: \(url.lastPathComponent)")
