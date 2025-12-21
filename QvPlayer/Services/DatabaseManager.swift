@@ -102,7 +102,9 @@ class DatabaseManager {
             cached_url TEXT,
             latency REAL,
             last_check REAL,
-            sort_order INTEGER DEFAULT 0
+            sort_order INTEGER DEFAULT 0,
+            file_size INTEGER,
+            creation_date REAL
         );
         """
         DebugLogger.shared.info("📝 [SQL] Executing: \(createTableString)")
@@ -165,7 +167,9 @@ class DatabaseManager {
             ("cached_url", "TEXT"),
             ("latency", "REAL"),
             ("last_check", "REAL"),
-            ("sort_order", "INTEGER DEFAULT 0")
+            ("sort_order", "INTEGER DEFAULT 0"),
+            ("file_size", "INTEGER"),
+            ("creation_date", "REAL")
         ]
         
         for (name, type) in columns {
@@ -188,8 +192,8 @@ class DatabaseManager {
                 return
             }
             let insertSQL = """
-            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             DebugLogger.shared.info("📝 [SQL] Executing: INSERT INTO library... \(video.title)")
             
@@ -239,6 +243,18 @@ class DatabaseManager {
                 
                 sqlite3_bind_int(stmt, 11, Int32(video.sortOrder))
                 
+                if let size = video.fileSize {
+                    sqlite3_bind_int64(stmt, 12, size)
+                } else {
+                    sqlite3_bind_null(stmt, 12)
+                }
+                
+                if let date = video.creationDate {
+                    sqlite3_bind_double(stmt, 13, date.timeIntervalSince1970)
+                } else {
+                    sqlite3_bind_null(stmt, 13)
+                }
+                
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     DebugLogger.shared.error("Could not insert video.")
                 }
@@ -257,8 +273,8 @@ class DatabaseManager {
             sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
             
             let insertSQL = """
-            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             
             var stmt: OpaquePointer?
@@ -308,6 +324,18 @@ class DatabaseManager {
                     
                     sqlite3_bind_int(stmt, 11, Int32(video.sortOrder))
                     
+                    if let size = video.fileSize {
+                        sqlite3_bind_int64(stmt, 12, size)
+                    } else {
+                        sqlite3_bind_null(stmt, 12)
+                    }
+                    
+                    if let date = video.creationDate {
+                        sqlite3_bind_double(stmt, 13, date.timeIntervalSince1970)
+                    } else {
+                        sqlite3_bind_null(stmt, 13)
+                    }
+                    
                     if sqlite3_step(stmt) != SQLITE_DONE {
                         DebugLogger.shared.error("Could not insert video in batch.")
                     }
@@ -328,7 +356,8 @@ class DatabaseManager {
             let updateSQL = """
             UPDATE library SET 
                 title = ?, url = ?, group_name = ?, is_live = ?, description = ?, 
-                thumbnail_url = ?, cached_url = ?, latency = ?, last_check = ?, sort_order = ?
+                thumbnail_url = ?, cached_url = ?, latency = ?, last_check = ?, sort_order = ?,
+                file_size = ?, creation_date = ?
             WHERE id = ?;
             """
             DebugLogger.shared.info("📝 [SQL] Executing: UPDATE library... \(video.title)")
@@ -377,7 +406,20 @@ class DatabaseManager {
                 }
                 
                 sqlite3_bind_int(stmt, 10, Int32(video.sortOrder))
-                sqlite3_bind_text(stmt, 11, (video.id.uuidString as NSString).utf8String, -1, nil)
+                
+                if let size = video.fileSize {
+                    sqlite3_bind_int64(stmt, 11, size)
+                } else {
+                    sqlite3_bind_null(stmt, 11)
+                }
+                
+                if let date = video.creationDate {
+                    sqlite3_bind_double(stmt, 12, date.timeIntervalSince1970)
+                } else {
+                    sqlite3_bind_null(stmt, 12)
+                }
+                
+                sqlite3_bind_text(stmt, 13, (video.id.uuidString as NSString).utf8String, -1, nil)
                 
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     DebugLogger.shared.error("Could not update video.")
@@ -471,6 +513,16 @@ class DatabaseManager {
                     
                     let sortOrder = Int(sqlite3_column_int(stmt, 10))
                     
+                    var fileSize: Int64?
+                    if sqlite3_column_type(stmt, 11) != SQLITE_NULL {
+                        fileSize = sqlite3_column_int64(stmt, 11)
+                    }
+                    
+                    var creationDate: Date?
+                    if sqlite3_column_type(stmt, 12) != SQLITE_NULL {
+                        creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 12))
+                    }
+                    
                     if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
                         let video = Video(
                             id: id,
@@ -483,7 +535,9 @@ class DatabaseManager {
                             cachedURL: cachedURL,
                             latency: latency,
                             lastLatencyCheck: lastCheck,
-                            sortOrder: sortOrder
+                            sortOrder: sortOrder,
+                            fileSize: fileSize,
+                            creationDate: creationDate
                         )
                         videos.append(video)
                     }

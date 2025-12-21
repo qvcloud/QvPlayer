@@ -65,7 +65,7 @@ struct VideoListView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
-                headerView
+                // headerView
                 
                 if isLoading {
                     loadingView
@@ -157,22 +157,6 @@ struct VideoListView: View {
                 .padding(.vertical, 12)
                 .padding(.leading, 20)
             Spacer()
-            
-            Menu {
-                Button(role: .destructive) {
-                    PlaylistManager.shared.deleteGroup(group.name)
-                } label: {
-                    Label("Delete Group", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.card) // Improve focus behavior
         }
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -188,16 +172,16 @@ struct VideoListView: View {
             if video.cachedURL == nil {
                 Button {
                     Task {
-                        _ = try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
-                        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                        if let localURL = try? await CacheManager.shared.cacheNetworkVideo(url: video.url, id: video.id) {
+                            PlaylistManager.shared.updateVideoCacheStatus(video: video, localURL: localURL)
+                        }
                     }
                 } label: {
                     Label("Cache Locally", systemImage: "arrow.down.circle")
                 }
             } else {
                 Button(role: .destructive) {
-                    CacheManager.shared.removeCachedVideo(url: video.url)
-                    NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                    PlaylistManager.shared.uncacheVideo(video)
                 } label: {
                     Label("Remove Cache", systemImage: "trash")
                 }
@@ -228,7 +212,7 @@ struct VideoCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                VideoThumbnailView(url: video.url)
+                VideoThumbnailView(video: video)
                     .aspectRatio(16/9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 

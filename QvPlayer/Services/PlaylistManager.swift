@@ -202,8 +202,8 @@ class PlaylistManager: ObservableObject {
         DebugLogger.shared.info("Deleting video: \(video.title)")
         
         // Clear cache and thumbnail
-        CacheManager.shared.removeCachedVideo(url: video.url)
-        CacheManager.shared.removeThumbnail(for: video.url)
+        CacheManager.shared.removeCachedVideo(id: video.id)
+        CacheManager.shared.removeThumbnail(id: video.id)
         
         DatabaseManager.shared.deleteVideo(id: video.id)
         notifyUpdate()
@@ -247,8 +247,8 @@ class PlaylistManager: ObservableObject {
         DebugLogger.shared.info("Deleting video: \(video.title)")
         
         // Clear cache and thumbnail
-        CacheManager.shared.removeCachedVideo(url: video.url)
-        CacheManager.shared.removeThumbnail(for: video.url)
+        CacheManager.shared.removeCachedVideo(id: video.id)
+        CacheManager.shared.removeThumbnail(id: video.id)
         
         DatabaseManager.shared.deleteVideo(id: video.id)
         notifyUpdate()
@@ -266,8 +266,8 @@ class PlaylistManager: ObservableObject {
         
         for video in videosToDelete {
              // Clear cache and thumbnail
-             CacheManager.shared.removeCachedVideo(url: video.url)
-             CacheManager.shared.removeThumbnail(for: video.url)
+             CacheManager.shared.removeCachedVideo(id: video.id)
+             CacheManager.shared.removeThumbnail(id: video.id)
              DatabaseManager.shared.deleteVideo(id: video.id)
         }
         
@@ -301,8 +301,8 @@ class PlaylistManager: ObservableObject {
             DebugLogger.shared.info("Deleting video: \(video.title)")
             
             // Clear cache and thumbnail
-            CacheManager.shared.removeCachedVideo(url: video.url)
-            CacheManager.shared.removeThumbnail(for: video.url)
+            CacheManager.shared.removeCachedVideo(id: video.id)
+            CacheManager.shared.removeThumbnail(id: video.id)
             
             DatabaseManager.shared.deleteVideo(id: video.id)
         }
@@ -319,6 +319,57 @@ class PlaylistManager: ObservableObject {
             video.group = newGroup
             DatabaseManager.shared.updateVideo(video)
         }
+        notifyUpdate()
+    }
+    
+    func updateVideoCacheStatus(video: Video, localURL: URL) {
+        var updatedVideo = video
+        updatedVideo.cachedURL = localURL
+        
+        if let attributes = CacheManager.shared.getFileAttributes(url: localURL) {
+            updatedVideo.fileSize = attributes.size
+            updatedVideo.creationDate = attributes.date
+        }
+        
+        DatabaseManager.shared.updateVideo(updatedVideo)
+        notifyUpdate()
+    }
+    
+    func uncacheVideo(_ video: Video) {
+        DebugLogger.shared.info("Uncaching video: \(video.title)")
+        CacheManager.shared.removeCachedVideo(id: video.id)
+        
+        var updatedVideo = video
+        updatedVideo.cachedURL = nil
+        updatedVideo.fileSize = nil
+        updatedVideo.creationDate = nil
+        
+        DatabaseManager.shared.updateVideo(updatedVideo)
+        notifyUpdate()
+    }
+    
+    func cleanCache(olderThan date: Date) {
+        DebugLogger.shared.info("Cleaning cache older than \(date)")
+        let videos = getPlaylistVideos()
+        
+        let videosToClean = videos.filter { video in
+            guard let creationDate = video.creationDate else { return false }
+            return creationDate < date
+        }
+        
+        for video in videosToClean {
+            DebugLogger.shared.info("Cleaning expired cache for video: \(video.title)")
+            
+            // 1. Remove files
+            if let cachedURL = video.cachedURL {
+                CacheManager.shared.removeCachedVideo(id: video.id)
+            }
+            CacheManager.shared.removeThumbnail(id: video.id)
+            
+            // 2. Delete video record from DB
+            DatabaseManager.shared.deleteVideo(id: video.id)
+        }
+        
         notifyUpdate()
     }
 }

@@ -5,7 +5,7 @@ import KSPlayer
 #endif
 
 struct VideoThumbnailView: View {
-    let url: URL
+    let video: Video
     @State private var image: UIImage?
     @State private var isLoading = true
     
@@ -34,7 +34,7 @@ struct VideoThumbnailView: View {
     
     private func generateThumbnail() async {
         // 0. Check Cache
-        if let cachedImage = CacheManager.shared.getThumbnail(for: url) {
+        if let cachedImage = CacheManager.shared.getThumbnail(id: video.id) {
             await MainActor.run {
                 self.image = cachedImage
                 self.isLoading = false
@@ -42,12 +42,12 @@ struct VideoThumbnailView: View {
             return
         }
         
-        DebugLogger.shared.info("Generating thumbnail for: \(url.lastPathComponent)")
+        DebugLogger.shared.info("Generating thumbnail for: \(video.title)")
         
         // Resolve localcache:// URL
-        var targetURL = url
-        if url.scheme == "localcache" {
-            let rawFilename = url.host ?? url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var targetURL = video.url
+        if video.url.scheme == "localcache" {
+            let rawFilename = video.url.host ?? video.url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             if !rawFilename.isEmpty, let filename = rawFilename.removingPercentEncoding {
                 let fileURL = CacheManager.shared.getFileURL(filename: filename)
                 if FileManager.default.fileExists(atPath: fileURL.path) {
@@ -82,11 +82,11 @@ struct VideoThumbnailView: View {
                 self.isLoading = false
                 // Save to cache
                 if let image = self.image {
-                    CacheManager.shared.saveThumbnail(image: image, for: url)
+                    CacheManager.shared.saveThumbnail(image: image, id: video.id)
                 }
             }
         } catch {
-            DebugLogger.shared.warning("AVAssetImageGenerator failed for \(url.lastPathComponent): \(error.localizedDescription). Retrying with KSPlayer...")
+            DebugLogger.shared.warning("AVAssetImageGenerator failed for \(video.title): \(error.localizedDescription). Retrying with KSPlayer...")
             await generateThumbnailWithFFmpeg(url: targetURL)
         }
     }
@@ -104,7 +104,7 @@ struct VideoThumbnailView: View {
                     self.isLoading = false
                     // Save to cache
                     if let image = self.image {
-                        CacheManager.shared.saveThumbnail(image: image, for: self.url)
+                        CacheManager.shared.saveThumbnail(image: image, id: video.id)
                     }
                 }
                 DebugLogger.shared.info("KSPlayer thumbnail success for: \(url.lastPathComponent)")

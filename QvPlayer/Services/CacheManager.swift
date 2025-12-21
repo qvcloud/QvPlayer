@@ -25,9 +25,8 @@ class CacheManager {
         return thumbDir
     }
     
-    func getCachedFileURL(for remoteURL: URL) -> URL {
-        // Create a safe filename from the URL
-        let filename = remoteURL.lastPathComponent
+    func getCachedFileURL(id: UUID, fileExtension: String = "mp4") -> URL {
+        let filename = "\(id.uuidString).\(fileExtension)"
         return cacheDirectory.appendingPathComponent(filename)
     }
     
@@ -35,9 +34,13 @@ class CacheManager {
         return cacheDirectory.appendingPathComponent(filename)
     }
     
-    func isCached(remoteURL: URL) -> Bool {
-        let fileURL = getCachedFileURL(for: remoteURL)
-        return fileManager.fileExists(atPath: fileURL.path)
+    func isCached(id: UUID) -> Bool {
+        // Search for any file starting with the UUID
+        let prefix = id.uuidString
+        guard let fileURLs = try? fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil) else {
+            return false
+        }
+        return fileURLs.contains { $0.lastPathComponent.hasPrefix(prefix) }
     }
     
     func saveUploadedFile(data: Data, filename: String) throws -> URL {
@@ -48,9 +51,12 @@ class CacheManager {
         return fileURL
     }
     
-    func cacheNetworkVideo(url: URL) async throws -> URL {
-        DebugLogger.shared.info("Caching network video: \(url.lastPathComponent)")
-        let destinationURL = getCachedFileURL(for: url)
+    func cacheNetworkVideo(url: URL, id: UUID) async throws -> URL {
+        DebugLogger.shared.info("Caching network video: \(url.lastPathComponent) as \(id.uuidString)")
+        
+        let fileExtension = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
+        let destinationURL = getCachedFileURL(id: id, fileExtension: fileExtension)
+        
         if fileManager.fileExists(atPath: destinationURL.path) {
             DebugLogger.shared.info("Video already cached: \(destinationURL.lastPathComponent)")
             return destinationURL
@@ -66,6 +72,19 @@ class CacheManager {
         DebugLogger.shared.info("Video cached successfully: \(destinationURL.lastPathComponent)")
         
         return destinationURL
+    }
+    
+    func getFileAttributes(url: URL) -> (size: Int64, date: Date)? {
+        do {
+            let attributes = try fileManager.attributesOfItem(atPath: url.path)
+            if let size = attributes[.size] as? Int64,
+               let date = attributes[.creationDate] as? Date {
+                return (size, date)
+            }
+        } catch {
+            DebugLogger.shared.error("Failed to get attributes for \(url.path): \(error.localizedDescription)")
+        }
+        return nil
     }
     
     func cleanCache(olderThan timeInterval: TimeInterval = 24 * 60 * 60) {
@@ -92,10 +111,20 @@ class CacheManager {
         try? fileManager.removeItem(at: thumbnailDirectory)
     }
     
-    func removeCachedVideo(url: URL) {
-        let fileURL = getCachedFileURL(for: url)
-        DebugLogger.shared.info("Removing cached video: \(fileURL.lastPathComponent)")
-        try? fileManager.removeItem(at: fileURL)
+    func removeCachedVideo(id: UUID) {
+        // Search for files with this ID prefix to handle any extension
+        let prefix = id.uuidString
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: cacheDirectory, includingPropertiesForKeys: nil)
+            for url in fileURLs {
+                if url.lastPathComponent.hasPrefix(prefix) {
+                    DebugLogger.shared.info("Removing cached video: \(url.lastPathComponent)")
+                    try? fileManager.removeItem(at: url)
+                }
+            }
+        } catch {
+            DebugLogger.shared.error("Failed to remove cached video for ID \(id): \(error)")
+        }
     }
     
     func calculateCacheSize() -> Int64 {
@@ -139,14 +168,13 @@ class CacheManager {
     
     // MARK: - Thumbnail Caching
     
-    func getThumbnailURL(for remoteURL: URL) -> URL {
-        // Use a hash or safe filename for the thumbnail
-        let filename = remoteURL.lastPathComponent + ".jpg"
+    func getThumbnailURL(id: UUID) -> URL {
+        let filename = id.uuidString + ".jpg"
         return thumbnailDirectory.appendingPathComponent(filename)
     }
     
-    func saveThumbnail(image: UIImage, for remoteURL: URL) {
-        let fileURL = getThumbnailURL(for: remoteURL)
+    func saveThumbnail(image: UIImage, id: UUID) {
+        let fileURL = getThumbnailURL(id: id)
         if let data = image.jpegData(compressionQuality: 0.7) {
             do {
                 try data.write(to: fileURL)
@@ -157,8 +185,8 @@ class CacheManager {
         }
     }
     
-    func getThumbnail(for remoteURL: URL) -> UIImage? {
-        let fileURL = getThumbnailURL(for: remoteURL)
+    func getThumbnail(id: UUID) -> UIImage? {
+        let fileURL = getThumbnailURL(id: id)
         if fileManager.fileExists(atPath: fileURL.path),
            let data = try? Data(contentsOf: fileURL) {
             return UIImage(data: data)
@@ -166,8 +194,8 @@ class CacheManager {
         return nil
     }
     
-    func removeThumbnail(for remoteURL: URL) {
-        let fileURL = getThumbnailURL(for: remoteURL)
+    func removeThumbnail(id: UUID) {
+        let fileURL = getThumbnailURL(id: id)
         if fileManager.fileExists(atPath: fileURL.path) {
             DebugLogger.shared.info("Removing cached thumbnail: \(fileURL.lastPathComponent)")
             try? fileManager.removeItem(at: fileURL)
