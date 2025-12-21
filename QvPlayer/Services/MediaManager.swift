@@ -55,14 +55,39 @@ class MediaManager: ObservableObject {
         }
     }
     
+    var isLoopingEnabled: Bool {
+        get {
+            return DatabaseManager.shared.getConfig(key: "loop_playback") == "true"
+        }
+        set {
+            DatabaseManager.shared.setConfig(key: "loop_playback", value: newValue ? "true" : "false")
+            notifyUpdate()
+        }
+    }
+    
     private func handlePlaybackFinished() {
         DebugLogger.shared.info("Queue: Playback finished signal received")
         
-        // 1. Mark current playing item as played
+        // 1. Identify the item that just finished
         let currentQueue = getPlayQueue()
-        if let currentItem = currentQueue.first(where: { $0.status == .playing }) {
-            DebugLogger.shared.info("Queue: Marking current item \(currentItem.id) as played")
-            updateQueueItemStatus(id: currentItem.id, status: .played)
+        var finishedItem: PlayQueueItem?
+        
+        // Priority 1: Item marked as .playing
+        if let item = currentQueue.first(where: { $0.status == .playing }) {
+            finishedItem = item
+        } 
+        // Priority 2: Item matching currentPlayingVideoId
+        else if let playingId = currentPlayingVideoId, 
+                let item = currentQueue.first(where: { $0.videoId == playingId }) {
+            DebugLogger.shared.info("Queue: Fallback - Found item by ID \(playingId) with status \(item.status)")
+            finishedItem = item
+        }
+        
+        if let currentItem = finishedItem {
+            DebugLogger.shared.info("Queue: Marking item \(currentItem.id) as played")
+            if currentItem.status != .played {
+                updateQueueItemStatus(id: currentItem.id, status: .played)
+            }
             
             // 2. Fetch updated queue to decide next step
             let updatedQueue = getPlayQueue()
@@ -78,12 +103,11 @@ class MediaManager: ObservableObject {
                 // Queue finished
                 DebugLogger.shared.info("Queue: No more pending items")
                 
-                if currentItem.isLooping {
+                if isLoopingEnabled {
                     DebugLogger.shared.info("Queue: Looping enabled. Resetting queue.")
                     // Reset all items to pending
-                    for item in updatedQueue {
-                        updateQueueItemStatus(id: item.id, status: .pending)
-                    }
+                    DatabaseManager.shared.resetPlayQueueStatus()
+                    notifyUpdate()
                     
                     // Play first item
                     if let firstItem = updatedQueue.first, let video = firstItem.video {
@@ -407,25 +431,35 @@ class MediaManager: ObservableObject {
     
     // MARK: - Play Queue
     
-    func addToPlayQueue(video: Video, isLooping: Bool = false) {
+    func addToPlayQueue(video: Video, isLooping: Bool? = nil) {
         DebugLogger.shared.info("Queue: Adding video \(video.title) to queue")
+        
+        if let loop = isLooping {
+            self.isLoopingEnabled = loop
+        }
+        
         let queue = getPlayQueue()
         let maxSort = queue.map { $0.sortOrder }.max() ?? 0
         let newSort = maxSort + 1
         
-        let item = PlayQueueItem(videoId: video.id, sortOrder: newSort, status: .pending, isLooping: isLooping)
+        let item = PlayQueueItem(videoId: video.id, sortOrder: newSort, status: .pending)
         DatabaseManager.shared.addPlayQueueItem(item)
         notifyUpdate()
         
         checkAndStartPlayback()
     }
     
-    func replaceQueue(videos: [Video], isLooping: Bool = false) {
+    func replaceQueue(videos: [Video], isLooping: Bool? = nil) {
         DebugLogger.shared.info("Queue: Replacing queue with \(videos.count) videos")
+        
+        if let loop = isLooping {
+            self.isLoopingEnabled = loop
+        }
+        
         clearPlayQueue()
         
         for (index, video) in videos.enumerated() {
-            let item = PlayQueueItem(videoId: video.id, sortOrder: index, status: .pending, isLooping: isLooping)
+            let item = PlayQueueItem(videoId: video.id, sortOrder: index, status: .pending)
             DatabaseManager.shared.addPlayQueueItem(item)
         }
         notifyUpdate()
@@ -481,6 +515,11 @@ class MediaManager: ObservableObject {
         DebugLogger.shared.info("Queue: Moving item \(id) to \(newSortOrder)")
         DatabaseManager.shared.updatePlayQueueSortOrder(id: id, sortOrder: newSortOrder)
         notifyUpdate()
+    }
+    
+    func updateQueueLoopStatus(isLooping: Bool) {
+        DebugLogger.shared.info("Queue: Updating loop status to \(isLooping)")
+        self.isLoopingEnabled = isLooping
     }
     
     func checkAndStartPlayback() {

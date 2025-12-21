@@ -557,17 +557,22 @@ struct WebAssets {
                 let currentPage = 1;
                 const itemsPerPage = 20;
                 let searchQuery = '';
-                let loopEnabled = localStorage.getItem('loopEnabled') === 'true';
+                let loopEnabled = false;
                 
                 // Initialize Loop Checkbox
                 document.addEventListener('DOMContentLoaded', () => {
-                    const cb = document.getElementById('loopPlaylist');
+                    const cb = document.getElementById('loopMedia');
                     if(cb) cb.checked = loopEnabled;
                 });
 
                 function toggleLoop(cb) {
                     loopEnabled = cb.checked;
-                    localStorage.setItem('loopEnabled', loopEnabled);
+                    
+                    fetch('/api/v1/queue/loop', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ isLooping: loopEnabled })
+                    });
                 }
                 
                 function switchTab(tabId) {
@@ -1265,7 +1270,8 @@ struct WebAssets {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
-                            videoId: video.id
+                            videoId: video.id,
+                            isLooping: loopEnabled
                         })
                     })
                     .then(res => res.json())
@@ -1411,6 +1417,13 @@ struct WebAssets {
                                     el.style.background = '#f2f2f7';
                                 }
                             });
+                            
+                            // Sync Loop Status
+                            if (data.isLooping !== undefined) {
+                                loopEnabled = data.isLooping;
+                                const cb = document.getElementById('loopMedia');
+                                if(cb && document.activeElement !== cb) cb.checked = loopEnabled;
+                            }
                             
                             // Loop Logic
                             // Disabled client-side loop logic as it is now handled by the server queue

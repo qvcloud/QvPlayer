@@ -168,6 +168,26 @@ class DatabaseManager {
         }
         sqlite3_finalize(createBatchesStmt)
         
+        // Create Config Table
+        let createConfigTableString = """
+        CREATE TABLE IF NOT EXISTS app_config(
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        """
+        DebugLogger.shared.info("📝 [SQL] Executing: \(createConfigTableString)")
+        var createConfigStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, createConfigTableString, -1, &createConfigStmt, nil) == SQLITE_OK {
+            if sqlite3_step(createConfigStmt) == SQLITE_DONE {
+                // Table created
+            } else {
+                DebugLogger.shared.error("Table app_config could not be created.")
+            }
+        } else {
+            DebugLogger.shared.error("CREATE TABLE app_config statement could not be prepared.")
+        }
+        sqlite3_finalize(createConfigStmt)
+        
         migrateSchema()
         
         // Migration: Rename videos to library if it exists and library is empty
@@ -647,7 +667,7 @@ class DatabaseManager {
             ensureDatabaseIsOpen()
             guard let db = db else { return }
             
-            let insertSQL = "INSERT INTO play_queue (id, video_id, sort_order, status, loop) VALUES (?, ?, ?, ?, ?);"
+            let insertSQL = "INSERT INTO play_queue (id, video_id, sort_order, status) VALUES (?, ?, ?, ?);"
             var stmt: OpaquePointer?
             
             if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
@@ -655,7 +675,6 @@ class DatabaseManager {
                 sqlite3_bind_text(stmt, 2, (item.videoId.uuidString as NSString).utf8String, -1, nil)
                 sqlite3_bind_int(stmt, 3, Int32(item.sortOrder))
                 sqlite3_bind_text(stmt, 4, (item.status.rawValue as NSString).utf8String, -1, nil)
-                sqlite3_bind_int(stmt, 5, item.isLooping ? 1 : 0)
                 
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     DebugLogger.shared.error("Error inserting play queue item")
@@ -671,7 +690,7 @@ class DatabaseManager {
             guard let db = db else { return [] }
             
             let querySQL = """
-            SELECT q.id, q.video_id, q.sort_order, q.status, q.loop,
+            SELECT q.id, q.video_id, q.sort_order, q.status,
                    l.id, l.title, l.url, l.group_name, l.is_live, l.description, l.thumbnail_url, l.cached_url, l.latency, l.last_check, l.sort_order, l.file_size, l.creation_date
             FROM play_queue q
             LEFT JOIN library l ON q.video_id = l.id
@@ -694,48 +713,47 @@ class DatabaseManager {
                     let qSort = Int(sqlite3_column_int(stmt, 2))
                     let statusStr = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }) ?? "pending"
                     let status = PlayQueueStatus(rawValue: statusStr) ?? .pending
-                    let isLooping = sqlite3_column_int(stmt, 4) != 0
                     
                     // Video Fields (Joined)
                     var video: Video? = nil
-                    if let lIdStr = sqlite3_column_text(stmt, 5).map({ String(cString: $0) }),
+                    if let lIdStr = sqlite3_column_text(stmt, 4).map({ String(cString: $0) }),
                        let lId = UUID(uuidString: lIdStr),
-                       let title = sqlite3_column_text(stmt, 6).map({ String(cString: $0) }),
-                       let urlStr = sqlite3_column_text(stmt, 7).map({ String(cString: $0) }),
+                       let title = sqlite3_column_text(stmt, 5).map({ String(cString: $0) }),
+                       let urlStr = sqlite3_column_text(stmt, 6).map({ String(cString: $0) }),
                        let url = URL(string: urlStr) {
                         
-                        let group = sqlite3_column_text(stmt, 8).map({ String(cString: $0) })
-                        let isLive = sqlite3_column_int(stmt, 9) != 0
-                        let desc = sqlite3_column_text(stmt, 10).map({ String(cString: $0) })
-                        let thumb = sqlite3_column_text(stmt, 11).map({ String(cString: $0) }).flatMap { URL(string: $0) }
-                        let cached = sqlite3_column_text(stmt, 12).map({ String(cString: $0) }).flatMap { URL(string: $0) }
+                        let group = sqlite3_column_text(stmt, 7).map({ String(cString: $0) })
+                        let isLive = sqlite3_column_int(stmt, 8) != 0
+                        let desc = sqlite3_column_text(stmt, 9).map({ String(cString: $0) })
+                        let thumb = sqlite3_column_text(stmt, 10).map({ String(cString: $0) }).flatMap { URL(string: $0) }
+                        let cached = sqlite3_column_text(stmt, 11).map({ String(cString: $0) }).flatMap { URL(string: $0) }
                         
                         var latency: Double?
-                        if sqlite3_column_type(stmt, 13) != SQLITE_NULL {
-                            latency = sqlite3_column_double(stmt, 13)
+                        if sqlite3_column_type(stmt, 12) != SQLITE_NULL {
+                            latency = sqlite3_column_double(stmt, 12)
                         }
                         
                         var lastCheck: Date?
-                        if sqlite3_column_type(stmt, 14) != SQLITE_NULL {
-                            lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 14))
+                        if sqlite3_column_type(stmt, 13) != SQLITE_NULL {
+                            lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 13))
                         }
                         
-                        let lSort = Int(sqlite3_column_int(stmt, 15))
+                        let lSort = Int(sqlite3_column_int(stmt, 14))
                         
                         var fileSize: Int64?
-                        if sqlite3_column_type(stmt, 16) != SQLITE_NULL {
-                            fileSize = sqlite3_column_int64(stmt, 16)
+                        if sqlite3_column_type(stmt, 15) != SQLITE_NULL {
+                            fileSize = sqlite3_column_int64(stmt, 15)
                         }
                         
                         var creationDate: Date?
-                        if sqlite3_column_type(stmt, 17) != SQLITE_NULL {
-                            creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 17))
+                        if sqlite3_column_type(stmt, 16) != SQLITE_NULL {
+                            creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 16))
                         }
                         
                         video = Video(id: lId, title: title, url: url, group: group, isLive: isLive, description: desc, thumbnailURL: thumb, cachedURL: cached, latency: latency, lastLatencyCheck: lastCheck, sortOrder: lSort, fileSize: fileSize, creationDate: creationDate)
                     }
                     
-                    items.append(PlayQueueItem(id: qId, videoId: vId, sortOrder: qSort, status: status, isLooping: isLooping, video: video))
+                    items.append(PlayQueueItem(id: qId, videoId: vId, sortOrder: qSort, status: status, video: video))
                 }
             }
             sqlite3_finalize(stmt)
@@ -769,6 +787,20 @@ class DatabaseManager {
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
                 sqlite3_bind_int(stmt, 1, Int32(sortOrder))
                 sqlite3_bind_text(stmt, 2, (id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func resetPlayQueueStatus() {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "UPDATE play_queue SET status = 'pending';"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
@@ -845,6 +877,46 @@ class DatabaseManager {
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
+        }
+    }
+    
+    // MARK: - App Config
+    
+    func setConfig(key: String, value: String) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "INSERT OR REPLACE INTO app_config (key, value) VALUES (?, ?);"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (key as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (value as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func getConfig(key: String) -> String? {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return nil }
+            
+            let sql = "SELECT value FROM app_config WHERE key = ?;"
+            var stmt: OpaquePointer?
+            var result: String?
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (key as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    if let val = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }) {
+                        result = val
+                    }
+                }
+            }
+            sqlite3_finalize(stmt)
+            return result
         }
     }
 }

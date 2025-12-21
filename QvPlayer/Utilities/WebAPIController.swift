@@ -40,6 +40,7 @@ class WebAPIController {
     
     func handleGetStatus(currentStatus: [String: Any]) -> String? {
         var status = currentStatus
+        status["isLooping"] = MediaManager.shared.isLoopingEnabled
         
         // Add Queue Data
         let items = MediaManager.shared.getPlayQueue()
@@ -48,8 +49,7 @@ class WebAPIController {
                 "id": item.id.uuidString,
                 "videoId": item.videoId.uuidString,
                 "sortOrder": item.sortOrder,
-                "status": item.status.rawValue,
-                "isLooping": item.isLooping
+                "status": item.status.rawValue
             ]
             
             if let video = item.video {
@@ -229,8 +229,7 @@ class WebAPIController {
                 "id": item.id.uuidString,
                 "videoId": item.videoId.uuidString,
                 "sortOrder": item.sortOrder,
-                "status": item.status.rawValue,
-                "isLooping": item.isLooping
+                "status": item.status.rawValue
             ]
             
             if let video = item.video {
@@ -257,7 +256,7 @@ class WebAPIController {
             return (false, "Invalid JSON")
         }
         
-        let isLooping = json["isLooping"] as? Bool ?? false
+        let isLooping = json["isLooping"] as? Bool
         
         // Option 1: Add single video by ID
         if let videoIdStr = json["videoId"] as? String,
@@ -310,5 +309,16 @@ class WebAPIController {
         } catch {
             return (false, "Failed to update queue sort order: \(error.localizedDescription)")
         }
+    }
+    
+    func handleUpdateQueueLoopStatus(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let isLooping = json["isLooping"] as? Bool else {
+            return (false, "Invalid JSON or missing isLooping")
+        }
+        
+        MediaManager.shared.updateQueueLoopStatus(isLooping: isLooping)
+        return (true, nil)
     }
 }
