@@ -95,7 +95,18 @@ struct PlayerView: View {
         .onReceive(NotificationCenter.default.publisher(for: .commandPlayVideo)) { notification in
             if let nextVideo = notification.userInfo?["video"] as? Video {
                 print("⏭ [PlayerView] Switching to next video: \(nextVideo.title)")
-                self.video = nextVideo
+                
+                // Force update if it's the same video
+                if self.video.id == nextVideo.id {
+                    // If it's the same video, we need to force a replay
+                    // For KSPlayerView, we can trigger a seek to 0 or re-set the URL
+                    // But since KSPlayerView checks for URL equality, we might need a way to force it.
+                    // A simple way is to post a seek command to 0 and play.
+                    NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": 0.0])
+                    NotificationCenter.default.post(name: .commandPlay, object: nil)
+                } else {
+                    self.video = nextVideo
+                }
                 
                 if playerEngine == "ksplayer" {
                     // KSPlayerView will update because 'video' is now a @State property passed to it

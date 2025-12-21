@@ -28,9 +28,11 @@ class MediaManager: ObservableObject {
         
         self.isPlayerPlaying = isPlaying
         
-        if isPlaying && currentPlayingVideoId != videoId {
-            DebugLogger.shared.info("Queue: Player started new video \(videoId)")
-            currentPlayingVideoId = videoId
+        if isPlaying {
+            if currentPlayingVideoId != videoId {
+                DebugLogger.shared.info("Queue: Player started new video \(videoId)")
+                currentPlayingVideoId = videoId
+            }
             
             let queue = getPlayQueue()
             
