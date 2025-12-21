@@ -24,6 +24,8 @@ class PlaylistService {
         
         var currentTitle: String?
         var currentGroup: String?
+        var currentLatency: Double?
+        var currentLastCheck: Date?
         
         for line in lines {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,6 +51,14 @@ class PlaylistService {
                 let components = trimmedLine.components(separatedBy: ",")
                 if components.count > 1 {
                     currentTitle = components.last?.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            } else if trimmedLine.hasPrefix("#QV-LATENCY:") {
+                if let val = Double(trimmedLine.dropFirst("#QV-LATENCY:".count)) {
+                    currentLatency = val
+                }
+            } else if trimmedLine.hasPrefix("#QV-LAST-CHECK:") {
+                if let val = Double(trimmedLine.dropFirst("#QV-LAST-CHECK:".count)) {
+                    currentLastCheck = Date(timeIntervalSince1970: val)
                 }
             } else if !trimmedLine.hasPrefix("#") {
                 // Handle custom localcache scheme
@@ -88,9 +98,11 @@ class PlaylistService {
                          cachedURL = CacheManager.shared.isCached(remoteURL: validURL) ? CacheManager.shared.getCachedFileURL(for: validURL) : nil
                     }
                     
-                    videos.append(Video(title: title, url: validURL, group: currentGroup, isLive: isLive, cachedURL: cachedURL))
+                    videos.append(Video(title: title, url: validURL, group: currentGroup, isLive: isLive, cachedURL: cachedURL, latency: currentLatency, lastLatencyCheck: currentLastCheck))
                     currentTitle = nil
                     currentGroup = nil
+                    currentLatency = nil
+                    currentLastCheck = nil
                 }
             }
         DebugLogger.shared.info("Parsed \(videos.count) videos from M3U")
@@ -109,6 +121,14 @@ class PlaylistService {
             extInf += ",\(video.title)"
             
             content += "\(extInf)\n"
+            
+            // Add custom tags for latency
+            if let latency = video.latency {
+                content += "#QV-LATENCY:\(latency)\n"
+            }
+            if let lastCheck = video.lastLatencyCheck {
+                content += "#QV-LAST-CHECK:\(lastCheck.timeIntervalSince1970)\n"
+            }
             
             var urlString = video.url.absoluteString
             if video.url.isFileURL {

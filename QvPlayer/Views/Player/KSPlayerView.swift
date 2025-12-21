@@ -157,12 +157,15 @@ struct KSPlayerView: UIViewRepresentable {
             let currentTime = player.currentPlaybackTime
             let duration = player.duration
             
+            let isLocal = playerLayer.url.isFileURL
+            let serverAddress = isLocal ? "Local" : "Remote"
+            
             let status: [String: Any] = [
                 "isPlaying": player.isPlaying,
                 "title": playerLayer.url.lastPathComponent,
                 "currentTime": currentTime.isNaN ? 0 : currentTime,
                 "duration": duration.isNaN ? 0 : duration,
-                "serverAddress": "Remote", // KSPlayer placeholder
+                "serverAddress": serverAddress,
                 "isOnline": player.isPlaying || player.duration > 0
             ]
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
@@ -190,7 +193,7 @@ struct KSPlayerView: UIViewRepresentable {
                 
                 // Update Online Status
                 stats.isOnline = player.isPlaying || player.duration > 0
-                stats.serverAddress = "Remote" // Placeholder
+                stats.serverAddress = serverAddress
                 
                 if let dynamicInfo = player.dynamicInfo {
                     currentBytes = dynamicInfo.bytesRead

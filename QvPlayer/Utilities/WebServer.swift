@@ -344,12 +344,22 @@ class WebServer {
         DebugLogger.shared.info("API: Get Videos - Found \(videos.count) items")
         
         let jsonItems = videos.map { video -> [String: Any] in
-            return [
+            var dict: [String: Any] = [
                 "title": video.title,
                 "url": video.url.absoluteString,
                 "group": video.group ?? "",
                 "isLive": video.isLive
             ]
+            
+            if let latency = video.latency {
+                dict["latency"] = latency
+            }
+            
+            if let lastCheck = video.lastLatencyCheck {
+                dict["lastLatencyCheck"] = lastCheck.timeIntervalSince1970
+            }
+            
+            return dict
         }
         
         if let data = try? JSONSerialization.data(withJSONObject: jsonItems, options: .prettyPrinted),

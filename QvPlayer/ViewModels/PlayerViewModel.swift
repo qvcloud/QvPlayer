@@ -259,6 +259,13 @@ class PlayerViewModel: ObservableObject {
                     if let event = player.currentItem?.accessLog()?.events.last {
                         stats.serverAddress = event.serverAddress ?? "-"
                     }
+                    
+                    if stats.serverAddress == "-" || stats.serverAddress.isEmpty {
+                        if let url = (player.currentItem?.asset as? AVURLAsset)?.url, url.isFileURL {
+                            stats.serverAddress = "Local"
+                        }
+                    }
+                    
                     DebugLogger.shared.videoStats = stats
                 @unknown default:
                     break
@@ -326,6 +333,12 @@ class PlayerViewModel: ObservableObject {
         var serverAddress = "-"
         if let event = player?.currentItem?.accessLog()?.events.last {
             serverAddress = event.serverAddress ?? "-"
+        }
+        
+        if serverAddress == "-" || serverAddress.isEmpty {
+            if let url = (player?.currentItem?.asset as? AVURLAsset)?.url, url.isFileURL {
+                serverAddress = "Local"
+            }
         }
         
         let currentTime = player?.currentTime().seconds ?? 0

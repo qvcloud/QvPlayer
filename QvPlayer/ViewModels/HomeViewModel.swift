@@ -157,6 +157,9 @@ class HomeViewModel: ObservableObject {
                     self.videos[index].lastLatencyCheck = Date()
                     // Re-group to update UI
                     self.groupVideos(self.videos)
+                    
+                    // Save to playlist
+                    PlaylistManager.shared.updateVideoLatency(at: index, latency: duration, lastCheck: Date())
                 }
             }
         } catch {
@@ -167,6 +170,9 @@ class HomeViewModel: ObservableObject {
                     self.videos[index].latency = -1 // Error/Timeout
                     self.videos[index].lastLatencyCheck = Date()
                     self.groupVideos(self.videos)
+                    
+                    // Save to playlist
+                    PlaylistManager.shared.updateVideoLatency(at: index, latency: -1, lastCheck: Date())
                 }
             }
         }

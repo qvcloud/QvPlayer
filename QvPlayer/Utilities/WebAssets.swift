@@ -202,6 +202,9 @@ struct WebAssets {
                 }
                                 .badge.live { background: #34c759; color: white; }
                 .badge.local { background: #007aff; color: white; }
+                .badge.latency-good { background: #34c759; color: white; }
+                .badge.latency-medium { background: #ff9500; color: white; }
+                .badge.latency-bad { background: #ff3b30; color: white; }
                 
                 .filter-group { display: flex; background: #f2f2f7; padding: 2px; border-radius: 8px; margin-right: 12px; }
                 .filter-btn { padding: 4px 12px; border: none; background: none; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--text-color); }
@@ -654,6 +657,20 @@ struct WebAssets {
                         const typeBadge = isLive 
                             ? '<span class="badge live">LIVE</span>' 
                             : '<span class="badge local">LOCAL</span>';
+                        
+                        let latencyBadge = '';
+                        if (isLive && video.latency !== undefined) {
+                            const latency = video.latency;
+                            if (latency < 0) {
+                                latencyBadge = '<span class="badge latency-bad">Timeout</span>';
+                            } else if (latency < 200) {
+                                latencyBadge = `<span class="badge latency-good">${Math.round(latency)}ms</span>`;
+                            } else if (latency < 500) {
+                                latencyBadge = `<span class="badge latency-medium">${Math.round(latency)}ms</span>`;
+                            } else {
+                                latencyBadge = `<span class="badge latency-bad">${Math.round(latency)}ms</span>`;
+                            }
+                        }
                             
                         const li = document.createElement('li');
                         li.className = 'video-item';
@@ -664,6 +681,7 @@ struct WebAssets {
                                     <div class="video-title">${escapeHtml(video.title)}</div>
                                     <div class="video-meta">
                                         ${typeBadge}
+                                        ${latencyBadge}
                                         <span class="badge">${escapeHtml(video.group || 'Default')}</span>
                                         <span style="opacity: 0.6; font-family: monospace; font-size: 11px;">${escapeHtml(truncateMiddle(video.url, 40))}</span>
                                     </div>

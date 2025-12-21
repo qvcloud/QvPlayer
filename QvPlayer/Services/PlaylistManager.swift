@@ -287,6 +287,19 @@ class PlaylistManager: ObservableObject {
         let newContent = PlaylistService.shared.generateM3U(from: videos)
         try savePlaylist(content: newContent)
     }
+    
+    func updateVideoLatency(at index: Int, latency: Double, lastCheck: Date) {
+        var videos = getPlaylistVideos()
+        guard index >= 0 && index < videos.count else { return }
+        
+        var video = videos[index]
+        video.latency = latency
+        video.lastLatencyCheck = lastCheck
+        videos[index] = video
+        
+        let newContent = PlaylistService.shared.generateM3U(from: videos)
+        try? savePlaylist(content: newContent)
+    }
 }
 
 extension Notification.Name {
