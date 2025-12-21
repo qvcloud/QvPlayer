@@ -13,7 +13,7 @@ struct DebugOverlayView: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                         Spacer()
-                        Text("Engine: \(playerEngine == "ksplayer" ? "KSPlayer" : "System")")
+                        (Text("Engine:") + Text(" ") + Text(playerEngine == "ksplayer" ? "KSPlayer" : "System"))
                             .font(.system(size: 10))
                             .foregroundColor(.yellow)
                             .padding(2)
@@ -145,7 +145,7 @@ struct StatRow: View {
     
     var body: some View {
         HStack(spacing: 4) {
-            Text("\(title):")
+            (Text(LocalizedStringKey(title)) + Text(":"))
                 .foregroundColor(.gray)
             Text(value)
                 .foregroundColor(.white)

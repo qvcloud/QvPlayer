@@ -43,6 +43,7 @@
 "Cancel" = "Cancel";
 "Clear" = "Clear";
 "Reset" = "Reset";
+"OK" = "OK";
 "This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone." = "This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone.";
 
 /* Home View */
@@ -58,4 +59,36 @@
 "Delete" = "Delete";
 "Check Speed" = "Check Speed";
 "Timeout" = "Timeout";
+
+/* Home View */
+"You can import videos via the Web Console:" = "You can import videos via the Web Console:";
+
+/* Debug Overlay */
+"Debug Console" = "Debug Console";
+"Engine:" = "Engine:";
+"Video Stats" = "Video Stats";
+"URL" = "URL";
+"Resolution" = "Resolution";
+"FPS" = "FPS";
+"Bitrate" = "Bitrate";
+"Codec" = "Codec";
+"Buffer" = "Buffer";
+"Speed" = "Speed";
+"Dropped" = "Dropped";
+"Server" = "Server";
+"Bytes" = "Bytes";
+"Time" = "Time";
+"Status" = "Status";
+"Remote Control" = "Remote Control";
+"Last Cmd" = "Last Cmd";
+
+/* Settings - Storage */
+"Cache Size" = "Cache Size";
+"Auto Clear Cache" = "Auto Clear Cache";
+"Never" = "Never";
+"1 Day" = "1 Day";
+"3 Days" = "3 Days";
+"7 Days" = "7 Days";
+"15 Days" = "15 Days";
+"30 Days" = "30 Days";
 

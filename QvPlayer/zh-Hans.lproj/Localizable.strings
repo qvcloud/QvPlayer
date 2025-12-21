@@ -43,6 +43,7 @@
 "Cancel" = "取消";
 "Clear" = "清除";
 "Reset" = "重置";
+"OK" = "确定";
 "This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone." = "这将删除所有播放列表、视频和缓存文件。应用将恢复到初始状态。此操作无法撤销。";
 
 /* Home View */
@@ -58,4 +59,36 @@
 "Delete" = "删除";
 "Check Speed" = "测速";
 "Timeout" = "超时";
+
+/* Home View */
+"You can import videos via the Web Console:" = "您可以通过 Web 控制台导入视频：";
+
+/* Debug Overlay */
+"Debug Console" = "调试控制台";
+"Engine:" = "引擎：";
+"Video Stats" = "视频统计";
+"URL" = "地址";
+"Resolution" = "分辨率";
+"FPS" = "帧率";
+"Bitrate" = "码率";
+"Codec" = "编码";
+"Buffer" = "缓冲";
+"Speed" = "速度";
+"Dropped" = "丢帧";
+"Server" = "服务器";
+"Bytes" = "大小";
+"Time" = "时间";
+"Status" = "状态";
+"Remote Control" = "远程控制";
+"Last Cmd" = "最后指令";
+
+/* Settings - Storage */
+"Cache Size" = "缓存大小";
+"Auto Clear Cache" = "自动清理缓存";
+"Never" = "从不";
+"1 Day" = "1 天";
+"3 Days" = "3 天";
+"7 Days" = "7 天";
+"15 Days" = "15 天";
+"30 Days" = "30 天";
 
