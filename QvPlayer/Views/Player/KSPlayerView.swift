@@ -221,23 +221,14 @@ struct KSPlayerView: UIViewRepresentable {
                 let currentTime = Date().timeIntervalSince1970
                 var currentBytes: Int64 = 0
                 
-                // Detailed Stream Info Logging
+                // Detailed Stream Info
                 if let dynamicInfo = player.dynamicInfo {
                     currentBytes = dynamicInfo.bytesRead
-                    // Use player properties for missing dynamicInfo fields
-                    let debugInfo = """
-                    [Stream Info]
-                    Bytes Read: \(dynamicInfo.bytesRead)
-                    Buffer Time: \(String(format: "%.2f", player.playableTime - player.currentPlaybackTime))s
-                    Video Resolution: \(Int(player.naturalSize.width))x\(Int(player.naturalSize.height))
-                    Frame Rate: \(String(format: "%.2f", player.nominalFrameRate))
-                    Bitrate: \(String(format: "%.2f", stats.bitrate / 1000)) kbps
-                    """
-                    // Reduce log frequency to avoid spamming
-                    if Int(currentTime) % 5 == 0 {
-                        DebugLogger.shared.info(debugInfo)
-                    }
+                    stats.bytesRead = dynamicInfo.bytesRead
                 }
+                
+                stats.currentTime = player.currentPlaybackTime
+                stats.duration = player.duration
                 
                 // Update Online Status
                 stats.status = (player.isPlaying || player.duration > 0) ? "Online" : "Offline"

@@ -57,6 +57,10 @@ struct DebugOverlayView: View {
                                 StatRow(title: "Server", value: logger.videoStats.serverAddress)
                             }
                             GridRow {
+                                StatRow(title: "Bytes", value: String(format: "%.2f MB", Double(logger.videoStats.bytesRead) / 1024 / 1024))
+                                StatRow(title: "Time", value: "\(formatDuration(logger.videoStats.currentTime)) / \(formatDuration(logger.videoStats.duration))")
+                            }
+                            GridRow {
                                 StatRow(title: "Status", value: logger.videoStats.status)
                                 Color.clear
                             }
@@ -119,6 +123,19 @@ struct DebugOverlayView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss.SSS"
         return formatter.string(from: date)
+    }
+    
+    private func formatDuration(_ seconds: Double) -> String {
+        if seconds.isNaN || seconds.isInfinite { return "00:00" }
+        let time = Int(seconds)
+        let h = time / 3600
+        let m = (time % 3600) / 60
+        let s = time % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        } else {
+            return String(format: "%02d:%02d", m, s)
+        }
     }
 }
 

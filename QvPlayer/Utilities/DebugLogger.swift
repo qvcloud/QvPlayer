@@ -22,6 +22,9 @@ class DebugLogger: ObservableObject {
         var bufferDuration: Double = 0.0
         var serverAddress: String = "-"
         var status: String = "-"
+        var bytesRead: Int64 = 0
+        var currentTime: Double = 0.0
+        var duration: Double = 0.0
     }
     
     enum LogType {
