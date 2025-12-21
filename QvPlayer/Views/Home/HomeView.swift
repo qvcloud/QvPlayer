@@ -43,7 +43,7 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .commandPlayVideo)) { notification in
                 if let index = notification.userInfo?["index"] as? Int {
-                    let videos = PlaylistManager.shared.getPlaylistVideos()
+                    let videos = MediaManager.shared.getVideos()
                     if index >= 0 && index < videos.count {
                         let video = videos[index]
                         navigationPath = NavigationPath()
@@ -173,7 +173,7 @@ struct VideoListView: View {
                 Button {
                     Task {
                         if let localURL = try? await CacheManager.shared.cacheNetworkVideo(url: video.url, id: video.id) {
-                            PlaylistManager.shared.updateVideoCacheStatus(video: video, localURL: localURL)
+                            MediaManager.shared.updateVideoCacheStatus(video: video, localURL: localURL)
                         }
                     }
                 } label: {
@@ -181,14 +181,14 @@ struct VideoListView: View {
                 }
             } else {
                 Button(role: .destructive) {
-                    PlaylistManager.shared.uncacheVideo(video)
+                    MediaManager.shared.uncacheVideo(video)
                 } label: {
                     Label("Remove Cache", systemImage: "trash")
                 }
             }
             
             Button(role: .destructive) {
-                PlaylistManager.shared.deleteVideo(video)
+                MediaManager.shared.deleteVideo(video)
             } label: {
                 Label("Delete", systemImage: "trash.fill")
             }

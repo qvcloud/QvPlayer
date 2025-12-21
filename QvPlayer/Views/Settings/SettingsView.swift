@@ -162,7 +162,7 @@ struct SettingsView: View {
         .alert("Reset App Data", isPresented: $showResetAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
-                PlaylistManager.shared.clearAllData()
+                MediaManager.shared.clearAllData()
                 updateCacheSize()
             }
         } message: {

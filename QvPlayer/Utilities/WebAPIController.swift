@@ -8,11 +8,12 @@ class WebAPIController {
     // MARK: - API Handlers
     
     func handleGetVideos() -> String? {
-        let videos = PlaylistManager.shared.getPlaylistVideos()
+        let videos = MediaManager.shared.getVideos()
         DebugLogger.shared.info("API: Get Videos - Found \(videos.count) items")
         
         let jsonItems = videos.map { video -> [String: Any] in
             var dict: [String: Any] = [
+                "id": video.id.uuidString,
                 "title": video.title,
                 "url": video.url.absoluteString,
                 "group": video.group ?? "",
@@ -56,7 +57,7 @@ class WebAPIController {
         let isLive = json["isLive"] as? Bool
         
         do {
-            try PlaylistManager.shared.appendVideo(title: title, url: url, group: group, isLive: isLive)
+            try MediaManager.shared.appendVideo(title: title, url: url, group: group, isLive: isLive)
             return (true, nil)
         } catch {
             return (false, "Failed to add video: \(error.localizedDescription)")
@@ -70,7 +71,7 @@ class WebAPIController {
         }
         
         do {
-            try PlaylistManager.shared.deleteVideo(at: index)
+            try MediaManager.shared.deleteVideo(at: index)
             return (true, nil)
         } catch {
             return (false, "Failed to delete video: \(error.localizedDescription)")
@@ -94,7 +95,7 @@ class WebAPIController {
         let isLive = json["isLive"] as? Bool
         
         do {
-            try PlaylistManager.shared.updateVideo(at: index, title: title, url: url, group: group, isLive: isLive)
+            try MediaManager.shared.updateVideo(at: index, title: title, url: url, group: group, isLive: isLive)
             return (true, nil)
         } catch {
             return (false, "Failed to update video: \(error.localizedDescription)")
@@ -110,7 +111,7 @@ class WebAPIController {
         }
         
         do {
-            try PlaylistManager.shared.batchUpdateGroup(indices: indices, newGroup: newGroup)
+            try MediaManager.shared.batchUpdateGroup(indices: indices, newGroup: newGroup)
             return (true, nil)
         } catch {
             return (false, "Failed to batch update group: \(error.localizedDescription)")
@@ -125,7 +126,7 @@ class WebAPIController {
         }
         
         do {
-            try PlaylistManager.shared.deleteVideos(at: indices)
+            try MediaManager.shared.deleteVideos(at: indices)
             return (true, nil)
         } catch {
             return (false, "Failed to delete videos: \(error.localizedDescription)")
@@ -141,7 +142,7 @@ class WebAPIController {
         }
         
         do {
-            try PlaylistManager.shared.updateVideoSortOrder(at: index, newOrder: newOrder)
+            try MediaManager.shared.updateVideoSortOrder(at: index, newOrder: newOrder)
             return (true, nil)
         } catch {
             return (false, "Failed to update sort order: \(error.localizedDescription)")
@@ -155,7 +156,7 @@ class WebAPIController {
             return (false, "Invalid JSON or missing group")
         }
         
-        PlaylistManager.shared.deleteGroup(group)
+        MediaManager.shared.deleteGroup(group)
         return (true, nil)
     }
     

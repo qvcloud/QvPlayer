@@ -1,7 +1,7 @@
 import Foundation
 
-class PlaylistManager: ObservableObject {
-    static let shared = PlaylistManager()
+class MediaManager: ObservableObject {
+    static let shared = MediaManager()
     
     // MARK: - Migration Logic
     // We keep the old file paths just for migration purposes
@@ -49,7 +49,7 @@ class PlaylistManager: ObservableObject {
         
         do {
             let content = try String(contentsOf: url, encoding: .utf8)
-            let m3uVideos = PlaylistService.shared.parseM3U(content: content)
+            let m3uVideos = MediaService.shared.parseM3U(content: content)
             
             // Also fetch old metadata if available to preserve latency info
             let metadata = DatabaseManager.shared.getAllMetadata()
@@ -89,12 +89,12 @@ class PlaylistManager: ObservableObject {
     
     // MARK: - Public API
     
-    func getPlaylistVideos() -> [Video] {
+    func getVideos() -> [Video] {
         return DatabaseManager.shared.getAllVideos()
     }
     
     func updateVideoSortOrder(at index: Int, newOrder: Int) throws {
-        var videos = getPlaylistVideos()
+        var videos = getVideos()
         guard index >= 0 && index < videos.count else { return }
         
         var video = videos[index]
@@ -107,7 +107,7 @@ class PlaylistManager: ObservableObject {
     func appendVideo(title: String, url: String, group: String? = nil, isLive: Bool? = nil) throws {
         DebugLogger.shared.info("Appending video: \(title)")
         guard let validURL = URL(string: url) else {
-            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for video: \(url)"])
+            let error = NSError(domain: "MediaManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for video: \(url)"])
             DebugLogger.shared.error(error.localizedDescription)
             throw error
         }
@@ -121,7 +121,7 @@ class PlaylistManager: ObservableObject {
         }
         
         // Calculate new sort order (lowest - 1 to append at end)
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         let minSortOrder = videos.map { $0.sortOrder }.min() ?? 0
         let newSortOrder = minSortOrder - 1
         
@@ -131,11 +131,11 @@ class PlaylistManager: ObservableObject {
         notifyUpdate()
     }
     
-    func appendPlaylist(content: String, customGroupName: String? = nil) throws {
+    func appendMediaFromM3U(content: String, customGroupName: String? = nil) throws {
         DebugLogger.shared.info("Appending playlist content")
-        let newVideos = PlaylistService.shared.parseM3U(content: content)
+        let newVideos = MediaService.shared.parseM3U(content: content)
         
-        let currentVideos = getPlaylistVideos()
+        let currentVideos = getVideos()
         var minSortOrder = currentVideos.map { $0.sortOrder }.min() ?? 0
         
         var videosToAdd = [Video]()
@@ -163,14 +163,14 @@ class PlaylistManager: ObservableObject {
         notifyUpdate()
     }
     
-    func replacePlaylist(content: String) throws {
+    func replaceMediaWithM3U(content: String) throws {
         DebugLogger.shared.warning("Replacing entire playlist")
         
         // 1. Clear existing data
         DatabaseManager.shared.deleteAllVideos()
         
         // 2. Import new content
-        let newVideos = PlaylistService.shared.parseM3U(content: content)
+        let newVideos = MediaService.shared.parseM3U(content: content)
         var videosToAdd = [Video]()
         
         for (index, var video) in newVideos.enumerated() {
@@ -192,9 +192,9 @@ class PlaylistManager: ObservableObject {
     }
     
     func deleteVideo(at index: Int) throws {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         guard index >= 0 && index < videos.count else {
-            let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for deletion: \(index)"])
+            let error = NSError(domain: "MediaManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for deletion: \(index)"])
             DebugLogger.shared.error(error.localizedDescription)
             throw error
         }
@@ -210,11 +210,11 @@ class PlaylistManager: ObservableObject {
     }
     
     func batchUpdateGroup(indices: [Int], newGroup: String) throws {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         let validIndices = indices.filter { $0 >= 0 && $0 < videos.count }
         
         guard !validIndices.isEmpty else {
-            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "No valid indices provided"])
+            let error = NSError(domain: "MediaManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "No valid indices provided"])
             throw error
         }
         
@@ -228,14 +228,14 @@ class PlaylistManager: ObservableObject {
     }
     
     func updateVideo(at index: Int, title: String, url: String, group: String? = nil, isLive: Bool? = nil) throws {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         guard index >= 0 && index < videos.count else {
-            let error = NSError(domain: "PlaylistManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for update: \(index)"])
+            let error = NSError(domain: "MediaManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Invalid index for update: \(index)"])
             DebugLogger.shared.error(error.localizedDescription)
             throw error
         }
         guard let validURL = URL(string: url) else {
-            let error = NSError(domain: "PlaylistManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for update: \(url)"])
+            let error = NSError(domain: "MediaManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid URL for update: \(url)"])
             DebugLogger.shared.error(error.localizedDescription)
             throw error
         }
@@ -273,7 +273,7 @@ class PlaylistManager: ObservableObject {
     }
     
     func deleteGroup(_ groupName: String) {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         
         // Find videos in the group
         let videosToDelete = videos.filter { $0.group == groupName }
@@ -311,7 +311,7 @@ class PlaylistManager: ObservableObject {
     }
 
     func deleteVideos(at indices: [Int]) throws {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         
         for index in indices {
             guard index >= 0 && index < videos.count else { continue }
@@ -329,7 +329,7 @@ class PlaylistManager: ObservableObject {
     }
     
     func updateVideosGroup(at indices: [Int], newGroup: String) throws {
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         
         for index in indices {
             guard index >= 0 && index < videos.count else { continue }
@@ -368,7 +368,7 @@ class PlaylistManager: ObservableObject {
     
     func cleanCache(olderThan date: Date) {
         DebugLogger.shared.info("Cleaning cache older than \(date)")
-        let videos = getPlaylistVideos()
+        let videos = getVideos()
         
         let videosToClean = videos.filter { video in
             guard let creationDate = video.creationDate else { return false }

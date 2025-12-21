@@ -368,6 +368,7 @@ class PlayerViewModel: ObservableObject {
         let status: [String: Any] = [
             "isPlaying": isPlaying,
             "title": currentVideo?.title ?? "Idle",
+            "id": currentVideo?.id.uuidString ?? "",
             "currentTime": currentTime.isNaN ? 0 : currentTime,
             "duration": duration.isNaN ? 0 : duration,
             "serverAddress": serverAddress,

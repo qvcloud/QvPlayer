@@ -256,7 +256,7 @@ class WebServer {
         var success = true
         var message: String?
         
-        if method == "GET" && (path == "/api/v1/playlist" || path == "/api/v1/videos") {
+        if method == "GET" && (path == "/api/v1/media" || path == "/api/v1/videos") {
             responseBody = WebAPIController.shared.handleGetVideos()
             if responseBody == nil { success = false; message = "Failed to serialize" }
         } else if method == "GET" && path == "/api/v1/status" {
@@ -423,7 +423,7 @@ class WebServer {
                     do {
                         // Use uploaded group name if provided, otherwise use filename
                         let groupName = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : (filename as NSString).deletingPathExtension
-                        try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
+                        try MediaManager.shared.appendMediaFromM3U(content: content, customGroupName: groupName)
                         successCount += 1
                     } catch {
                         errorMessages.append("Failed to import playlist \(filename): \(error.localizedDescription)")
@@ -444,7 +444,7 @@ class WebServer {
                 
                 let targetGroup = (uploadedGroup?.isEmpty == false) ? uploadedGroup! : "Local Uploads"
                 
-                try PlaylistManager.shared.appendVideo(title: filename, url: localURLString, group: targetGroup)
+                try MediaManager.shared.appendVideo(title: filename, url: localURLString, group: targetGroup)
                 
                 successCount += 1
             } catch {
@@ -480,14 +480,14 @@ class WebServer {
                 
                 let groupName = name ?? url.lastPathComponent
                 
-                // Dispatch to main queue to ensure thread safety with PlaylistManager if needed, 
-                // though PlaylistManager isn't strictly main-actor bound, it's good practice for shared state.
+                // Dispatch to main queue to ensure thread safety with MediaManager if needed, 
+                // though MediaManager isn't strictly main-actor bound, it's good practice for shared state.
                 // However, since we are in a Task, we can just call it. 
                 // But we need to be careful about sendResponse which uses the socket.
                 
                 DispatchQueue.main.async {
                     do {
-                        try PlaylistManager.shared.appendPlaylist(content: content, customGroupName: groupName)
+                        try MediaManager.shared.appendMediaFromM3U(content: content, customGroupName: groupName)
                         self.queue.async {
                             self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
                         }

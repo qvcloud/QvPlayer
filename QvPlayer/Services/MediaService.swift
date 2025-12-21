@@ -12,8 +12,8 @@ struct Playlist: Identifiable, Codable {
     }
 }
 
-class PlaylistService {
-    static let shared = PlaylistService()
+class MediaService {
+    static let shared = MediaService()
     
     private init() {}
     

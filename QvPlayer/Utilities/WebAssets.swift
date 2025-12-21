@@ -25,14 +25,51 @@ struct WebAssets {
                     background: var(--bg-color);
                     color: var(--text-color);
                     margin: 0;
-                    padding: 20px;
+                    padding: 0;
                     line-height: 1.5;
+                    height: 100vh;
+                    overflow: hidden;
                 }
                 
                 .container { 
-                    max-width: 1200px;
-                    min-width: 1024px;
-                    margin: 0 auto; 
+                    display: flex;
+                    height: 100%;
+                    width: 100%;
+                    max-width: none;
+                    margin: 0;
+                }
+                
+                .sidebar {
+                    width: 320px;
+                    background: #fff;
+                    border-right: 1px solid #d2d2d7;
+                    display: flex;
+                    flex-direction: column;
+                    padding: 0;
+                    box-sizing: border-box;
+                    flex-shrink: 0;
+                    z-index: 10;
+                }
+                
+                .sidebar-header {
+                    padding: 20px;
+                    border-bottom: 1px solid #e5e5ea;
+                    background: rgba(255,255,255,0.95);
+                    backdrop-filter: blur(10px);
+                }
+                
+                .sidebar-content {
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 0;
+                }
+                
+                .main-content {
+                    flex: 1;
+                    padding: 20px;
+                    overflow-y: auto;
+                    background: var(--bg-color);
+                    min-width: 0; /* Prevent flex overflow */
                 }
                 
                 .card {
@@ -318,8 +355,28 @@ struct WebAssets {
         </head>
         <body>
             <div class="container">
-                <div class="card">
-                    <div class="status-display">
+                <!-- Sidebar -->
+                <div class="sidebar">
+                    <div class="sidebar-header">
+                        <h2 style="margin-bottom: 12px;">Media Queue</h2>
+                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--secondary-text);">
+                            <label style="display: flex; align-items: center; cursor: pointer; color: var(--text-color);">
+                                <input type="checkbox" id="loopMedia" onchange="toggleLoop(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Loop Playback
+                            </label>
+                            <span id="mediaCount">0 items</span>
+                        </div>
+                    </div>
+                    <div class="sidebar-content">
+                        <ul id="sidebarList" class="video-list" style="padding: 0;">
+                            <!-- Sidebar items -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="main-content">
+                    <div class="card">
+                        <div class="status-display">
                         <div class="status-title">NOW PLAYING</div>
                         <div class="status-value" id="nowPlayingText">-</div>
                         <div class="time-display" id="timeText">00:00</div>
@@ -358,12 +415,12 @@ struct WebAssets {
                 </div>
                 
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('playlist')">Playlist</button>
+                    <button class="tab-btn active" onclick="switchTab('media')">Media</button>
                     <button class="tab-btn" onclick="switchTab('groups')">Groups</button>
                     <button class="tab-btn" onclick="switchTab('upload')">Upload</button>
                 </div>
                 
-                <div id="tab-playlist" class="tab-content">
+                <div id="tab-media" class="tab-content">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <h2>Library</h2>
@@ -379,7 +436,7 @@ struct WebAssets {
                                     <button class="btn secondary" onclick="openBatchMoveModal()">Move Selected</button>
                                     <button class="btn danger" onclick="batchDelete()">Delete Selected</button>
                                 </div>
-                                <button class="icon-btn" onclick="loadPlaylist()">
+                                <button class="icon-btn" onclick="loadMedia()">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M23 4v6h-6M1 20v-6h6"/>
                                         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -390,11 +447,11 @@ struct WebAssets {
                         <div style="padding: 8px 16px; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center;">
                             <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="margin-right: 12px;">
                             <label for="selectAll" style="font-size: 14px; color: var(--secondary-text); margin-right: 16px;">Select All</label>
-                            <select id="groupFilter" onchange="renderPlaylist()" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #d2d2d7; background: white; font-size: 13px; color: var(--text-color); cursor: pointer;">
+                            <select id="groupFilter" onchange="renderMedia()" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #d2d2d7; background: white; font-size: 13px; color: var(--text-color); cursor: pointer;">
                                 <option value="all">All Groups</option>
                             </select>
                         </div>
-                        <ul id="playlist" class="video-list">
+                        <ul id="mediaList" class="video-list">
                             <!-- Items loaded via JS -->
                         </ul>
                         <div id="pagination" class="pagination"></div>
@@ -455,7 +512,8 @@ struct WebAssets {
                     <p>Telegram: <a href="https://t.me/+KF2GIXtuEOY3MWI1" target="_blank" style="color: var(--primary-color); text-decoration: none;">https://t.me/+KF2GIXtuEOY3MWI1</a></p>
                     <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
                 </footer>
-            </div>
+                </div> <!-- End Main Content -->
+            </div> <!-- End Container -->
             
             <!-- Edit Modal -->
             <div id="editModal" class="modal">
@@ -498,6 +556,18 @@ struct WebAssets {
                 let currentPage = 1;
                 const itemsPerPage = 20;
                 let searchQuery = '';
+                let loopEnabled = localStorage.getItem('loopEnabled') === 'true';
+                
+                // Initialize Loop Checkbox
+                document.addEventListener('DOMContentLoaded', () => {
+                    const cb = document.getElementById('loopPlaylist');
+                    if(cb) cb.checked = loopEnabled;
+                });
+
+                function toggleLoop(cb) {
+                    loopEnabled = cb.checked;
+                    localStorage.setItem('loopEnabled', loopEnabled);
+                }
                 
                 function switchTab(tabId) {
                     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -533,7 +603,7 @@ struct WebAssets {
                     .then(res => res.json())
                     .then(res => {
                         if(res.success) {
-                            loadPlaylist();
+                            loadMedia();
                         }
                     });
                 }
@@ -584,8 +654,8 @@ struct WebAssets {
                             statusDiv.textContent = 'Success!';
                             document.getElementById('fileInput').value = '';
                             document.getElementById('fileName').textContent = '';
-                            switchTab('playlist');
-                            loadPlaylist();
+                            switchTab('media');
+                            loadMedia();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
@@ -635,8 +705,8 @@ struct WebAssets {
                             urlInput.value = '';
                             nameInput.value = '';
                             groupInput.value = '';
-                            switchTab('playlist');
-                            loadPlaylist();
+                            switchTab('media');
+                            loadMedia();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
@@ -686,8 +756,8 @@ struct WebAssets {
                             urlInput.value = '';
                             nameInput.value = '';
                             groupInput.value = '';
-                            switchTab('playlist');
-                            loadPlaylist();
+                            switchTab('media');
+                            loadMedia();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
@@ -712,7 +782,7 @@ struct WebAssets {
                     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
                     document.getElementById('filter-' + filter).classList.add('active');
                     document.getElementById('selectAll').checked = false;
-                    renderPlaylist();
+                    renderMedia();
                 }
 
                 function updateGroupFilter() {
@@ -742,12 +812,12 @@ struct WebAssets {
                     }
                 }
 
-                function loadPlaylist() {
-                    fetch('/api/v1/playlist')
+                function loadMedia() {
+                    fetch('/api/v1/media')
                         .then(res => res.json())
                         .then(data => {
                             if (!Array.isArray(data)) {
-                                console.error('Playlist data is not an array:', data);
+                                console.error('Media data is not an array:', data);
                                 return;
                             }
                             currentVideos = data;
@@ -756,10 +826,44 @@ struct WebAssets {
                             updateGroupFilter();
                             loadGroups();
                             document.getElementById('selectAll').checked = false;
+                            document.getElementById('mediaCount').textContent = currentVideos.length + ' items';
                             currentPage = 1;
-                            renderPlaylist();
+                            renderMedia();
+                            renderSidebar();
                         })
-                        .catch(err => console.error('Failed to load playlist:', err));
+                        .catch(err => console.error('Failed to load media:', err));
+                }
+                
+                function renderSidebar() {
+                    const list = document.getElementById('sidebarList');
+                    list.innerHTML = '';
+                    
+                    currentVideos.forEach((video, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'video-item sidebar-item';
+                        li.style.padding = '10px 16px';
+                        li.style.cursor = 'move';
+                        li.draggable = true;
+                        li.dataset.index = index;
+                        li.dataset.id = video.id;
+                        li.ondragstart = handleDragStart;
+                        li.ondragover = handleDragOver;
+                        li.ondrop = handleDrop;
+                        
+                        li.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                <div style="color: #ccc; font-size: 12px; width: 20px;">${index + 1}</div>
+                                <div class="video-info" style="margin-right: 0;">
+                                    <div class="video-title" style="font-size: 13px; margin-bottom: 2px;">${escapeHtml(video.title)}</div>
+                                    <div class="video-meta" style="font-size: 11px;">${escapeHtml(video.group || 'Default')}</div>
+                                </div>
+                            </div>
+                            <button class="icon-btn" onclick="playVideo(${index})" style="padding: 4px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                        `;
+                        list.appendChild(li);
+                    });
                 }
                 
                 function loadGroups() {
@@ -813,7 +917,7 @@ struct WebAssets {
                     .then(res => res.json())
                     .then(res => {
                         if (res.success) {
-                            loadPlaylist();
+                            loadMedia();
                         } else {
                             alert('Error: ' + (res.error || 'Unknown'));
                         }
@@ -831,7 +935,7 @@ struct WebAssets {
                     .then(res => res.json())
                     .then(res => {
                         if (res.success) {
-                            loadPlaylist();
+                            loadMedia();
                         } else {
                             alert('Error: ' + (res.error || 'Unknown'));
                         }
@@ -841,16 +945,16 @@ struct WebAssets {
                 function handleSearch(query) {
                     searchQuery = query.toLowerCase();
                     currentPage = 1;
-                    renderPlaylist();
+                    renderMedia();
                 }
 
                 function setPage(page) {
                     currentPage = page;
-                    renderPlaylist();
+                    renderMedia();
                 }
 
-                function renderPlaylist() {
-                    const list = document.getElementById('playlist');
+                function renderMedia() {
+                    const list = document.getElementById('mediaList');
                     list.innerHTML = '';
                     
                     const groupFilter = document.getElementById('groupFilter').value;
@@ -1091,7 +1195,7 @@ struct WebAssets {
                     .then(res => res.json())
                     .then(res => {
                         if (res.success) {
-                            loadPlaylist();
+                            loadMedia();
                         } else {
                             alert('Error: ' + (res.error || 'Unknown'));
                         }
@@ -1121,7 +1225,7 @@ struct WebAssets {
                     .then(res => {
                         if (res.success) {
                             closeBatchMoveModal();
-                            loadPlaylist();
+                            loadMedia();
                         } else {
                             alert('Error: ' + (res.error || 'Unknown'));
                         }
@@ -1135,7 +1239,7 @@ struct WebAssets {
                 function deleteVideo(index) {
                     if(confirm('Delete this stream?')) {
                         fetch('/api/v1/videos?index=' + index, { method: 'DELETE' })
-                            .then(() => loadPlaylist());
+                            .then(() => loadMedia());
                     }
                 }
                 
@@ -1190,7 +1294,7 @@ struct WebAssets {
                         body: JSON.stringify(data)
                     }).then(() => {
                         closeModal();
-                        loadPlaylist();
+                        loadMedia();
                     });
                 }
                 
@@ -1203,6 +1307,8 @@ struct WebAssets {
                         .replace(/'/g, "&#039;");
                 }
                 
+                let lastLoopTime = 0;
+
                 function updateStatus() {
                     fetch('/api/v1/status')
                         .then(res => res.json())
@@ -1241,13 +1347,40 @@ struct WebAssets {
                             } else {
                                 btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
                             }
+
+                            // Highlight Sidebar Item
+                            document.querySelectorAll('.sidebar-item').forEach(el => {
+                                el.style.background = 'transparent';
+                                if(data.id && el.dataset.id === data.id) {
+                                    el.style.background = '#f2f2f7';
+                                }
+                            });
+                            
+                            // Loop Logic
+                            if (loopEnabled && data.duration > 0 && data.id) {
+                                const now = Date.now();
+                                if (now - lastLoopTime < 5000) return; // Debounce 5s
+
+                                // Check if near end (within 1s) or ended
+                                if (data.currentTime >= data.duration - 1 && !data.isPlaying) {
+                                    const currentIndex = currentVideos.findIndex(v => v.id === data.id);
+                                    if (currentIndex !== -1) {
+                                        let nextIndex = currentIndex + 1;
+                                        if (nextIndex >= currentVideos.length) nextIndex = 0;
+                                        
+                                        console.log('Looping to next video:', nextIndex);
+                                        playVideo(nextIndex);
+                                        lastLoopTime = now;
+                                    }
+                                }
+                            }
                         })
                         .catch(console.error);
                 }
                 
                 setInterval(updateStatus, 1000);
                 updateStatus();
-                loadPlaylist();
+                loadMedia();
             </script>
         </body>
         </html>
@@ -1272,8 +1405,8 @@ struct WebAssets {
             <h1>QvPlayer API</h1>
             
             <div class="endpoint">
-                <span class="method">GET</span> <span class="url">/api/v1/videos</span>
-                <p>Get all videos in the playlist.</p>
+                <span class="method">GET</span> <span class="url">/api/v1/media</span>
+                <p>Get all videos in the media library.</p>
             </div>
             
             <div class="endpoint">
@@ -1307,8 +1440,8 @@ struct WebAssets {
             </div>
             
             <div class="endpoint">
-                <span class="method">POST</span> <span class="url">/api/v1/playlist</span>
-                <p>Replace the entire playlist.</p>
+                <span class="method">POST</span> <span class="url">/api/v1/media</span>
+                <p>Replace the entire media library.</p>
                 <pre>
         {
           "content": "#EXTM3U..."
