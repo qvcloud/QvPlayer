@@ -12,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("playerEngine") private var playerEngine = "system"
     
     @AppStorage("selectedLanguage") private var selectedLanguage = "system"
+    @AppStorage("showDebugOverlay") private var showDebugOverlay = false
+    
     @State private var showRestartAlert = false
     @State private var showClearCacheAlert = false
     @State private var showResetAlert = false
@@ -108,7 +110,7 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Debug")) {
-                Toggle("Show Debug Overlay", isOn: DebugLogger.shared.$showDebugOverlay)
+                Toggle("Show Debug Overlay", isOn: $showDebugOverlay)
             }
             
             Section(header: Text("About")) {

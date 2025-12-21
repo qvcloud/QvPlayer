@@ -28,3 +28,34 @@
 "Follow System" = "跟随系统";
 "Restart Required" = "需要重启";
 "Please restart the app to apply language changes." = "请重启应用以应用语言更改。";
+
+/* New Features */
+"Player Engine" = "播放引擎";
+"System (AVPlayer)" = "系统 (AVPlayer)";
+"KSPlayer (FFmpeg)" = "KSPlayer (FFmpeg)";
+"Storage" = "存储";
+"Clear All Cache" = "清除所有缓存";
+"Reset App Data" = "重置应用数据";
+"Debug" = "调试";
+"Show Debug Overlay" = "显示调试浮层";
+"Clear Cache" = "清除缓存";
+"Are you sure you want to clear all cached videos and thumbnails? This action cannot be undone." = "确定要清除所有缓存的视频和缩略图吗？此操作无法撤销。";
+"Cancel" = "取消";
+"Clear" = "清除";
+"Reset" = "重置";
+"This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone." = "这将删除所有播放列表、视频和缓存文件。应用将恢复到初始状态。此操作无法撤销。";
+
+/* Home View */
+"Local Files" = "本地文件";
+"Live Streams" = "直播流";
+"Local" = "本地";
+"Live" = "直播";
+"Loading..." = "加载中...";
+"No videos found" = "未找到视频";
+"Delete Group" = "删除分组";
+"Cache Locally" = "缓存到本地";
+"Remove Cache" = "移除缓存";
+"Delete" = "删除";
+"Check Speed" = "测速";
+"Timeout" = "超时";
+

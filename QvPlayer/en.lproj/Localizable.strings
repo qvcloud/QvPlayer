@@ -28,3 +28,34 @@
 "Follow System" = "Follow System";
 "Restart Required" = "Restart Required";
 "Please restart the app to apply language changes." = "Please restart the app to apply language changes.";
+
+/* New Features */
+"Player Engine" = "Player Engine";
+"System (AVPlayer)" = "System (AVPlayer)";
+"KSPlayer (FFmpeg)" = "KSPlayer (FFmpeg)";
+"Storage" = "Storage";
+"Clear All Cache" = "Clear All Cache";
+"Reset App Data" = "Reset App Data";
+"Debug" = "Debug";
+"Show Debug Overlay" = "Show Debug Overlay";
+"Clear Cache" = "Clear Cache";
+"Are you sure you want to clear all cached videos and thumbnails? This action cannot be undone." = "Are you sure you want to clear all cached videos and thumbnails? This action cannot be undone.";
+"Cancel" = "Cancel";
+"Clear" = "Clear";
+"Reset" = "Reset";
+"This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone." = "This will delete all playlists, videos, and cached files. The app will return to its initial state. This action cannot be undone.";
+
+/* Home View */
+"Local Files" = "Local Files";
+"Live Streams" = "Live Streams";
+"Local" = "Local";
+"Live" = "Live";
+"Loading..." = "Loading...";
+"No videos found" = "No videos found";
+"Delete Group" = "Delete Group";
+"Cache Locally" = "Cache Locally";
+"Remove Cache" = "Remove Cache";
+"Delete" = "Delete";
+"Check Speed" = "Check Speed";
+"Timeout" = "Timeout";
+
