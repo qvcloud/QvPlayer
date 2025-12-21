@@ -382,6 +382,12 @@ struct WebAssets {
 
                 <!-- Main Content -->
                 <div class="main-content">
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
+                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px; color: var(--secondary-text); background: var(--card-bg); padding: 4px 10px; border-radius: 16px; box-shadow: var(--shadow);">
+                            <input type="checkbox" id="debugOverlay" onchange="toggleDebug(this)" style="margin-right: 6px; width: auto; margin-bottom: 0;"> Debug Overlay
+                        </label>
+                    </div>
+
                     <div class="card">
                         <div class="status-display">
                         <div class="status-title">NOW PLAYING</div>
@@ -579,6 +585,14 @@ struct WebAssets {
                         method: 'PUT',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ isLooping: loopEnabled })
+                    });
+                }
+
+                function toggleDebug(cb) {
+                    fetch('/api/v1/debug', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ show: cb.checked })
                     });
                 }
 
@@ -1474,6 +1488,12 @@ struct WebAssets {
                                 loopEnabled = data.isLooping;
                                 const cb = document.getElementById('loopMedia');
                                 if(cb && document.activeElement !== cb) cb.checked = loopEnabled;
+                            }
+
+                            // Sync Debug Overlay Status
+                            if (data.showDebugOverlay !== undefined) {
+                                const cb = document.getElementById('debugOverlay');
+                                if(cb && document.activeElement !== cb) cb.checked = data.showDebugOverlay;
                             }
                             
                             // Loop Logic

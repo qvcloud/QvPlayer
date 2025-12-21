@@ -41,6 +41,7 @@ class WebAPIController {
     func handleGetStatus(currentStatus: [String: Any]) -> String? {
         var status = currentStatus
         status["isLooping"] = MediaManager.shared.isLoopingEnabled
+        status["showDebugOverlay"] = UserDefaults.standard.bool(forKey: "showDebugOverlay")
         
         // Add Queue Data
         let items = MediaManager.shared.getPlayQueue()
@@ -330,6 +331,21 @@ class WebAPIController {
         }
         
         MediaManager.shared.updateQueueLoopStatus(isLooping: isLooping)
+        return (true, nil)
+    }
+    
+    func handleUpdateDebugOverlay(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let show = json["show"] as? Bool else {
+            return (false, "Invalid JSON")
+        }
+        
+        UserDefaults.standard.set(show, forKey: "showDebugOverlay")
+        
+        DispatchQueue.main.async {
+            DebugLogger.shared.showDebugOverlay = show
+        }
         return (true, nil)
     }
 }

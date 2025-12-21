@@ -3,9 +3,10 @@ import SwiftUI
 struct DebugOverlayView: View {
     @StateObject private var logger = DebugLogger.shared
     @AppStorage("playerEngine") private var playerEngine = "system"
+    @AppStorage("showDebugOverlay") private var showDebugOverlay = false
     
     var body: some View {
-        if logger.showDebugOverlay {
+        if showDebugOverlay {
             GeometryReader { geometry in
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {

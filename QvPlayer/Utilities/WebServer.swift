@@ -289,6 +289,8 @@ class WebServer {
             (success, message) = WebAPIController.shared.handleUpdateQueueSortOrder(body: bodyString)
         } else if method == "PUT" && path == "/api/v1/queue/loop" {
             (success, message) = WebAPIController.shared.handleUpdateQueueLoopStatus(body: bodyString)
+        } else if method == "PUT" && path == "/api/v1/debug" {
+            (success, message) = WebAPIController.shared.handleUpdateDebugOverlay(body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/queue" {
             (success, message) = WebAPIController.shared.handleClearQueue(queryItems: queryItems)
         }
