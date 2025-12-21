@@ -14,6 +14,8 @@ class HomeViewModel: ObservableObject {
     @Published var liveVideoGroups: [VideoGroup] = []
     @Published var isLoading: Bool = false
     
+    private var checkAvailabilityTask: Task<Void, Never>?
+    
     init() {
         Task {
             await loadVideos()
@@ -82,5 +84,91 @@ class HomeViewModel: ObservableObject {
         
         // Keep original for backward compatibility if needed, or just union
         self.videoGroups = self.localVideoGroups + self.liveVideoGroups
+    }
+    
+    func startLiveStreamsCheck() {
+        stopLiveStreamsCheck()
+        
+        checkAvailabilityTask = Task {
+            await checkLiveStreamsAvailability()
+        }
+    }
+    
+    func stopLiveStreamsCheck() {
+        checkAvailabilityTask?.cancel()
+        checkAvailabilityTask = nil
+    }
+
+    private func checkLiveStreamsAvailability() async {
+        let now = Date()
+        let tenMinutesAgo = now.addingTimeInterval(-600)
+        
+        let videosToCheck = videos.filter { video in
+            guard video.isLive else { return false }
+            // Skip local files
+            if video.url.isFileURL || video.cachedURL != nil { return false }
+            
+            if let lastCheck = video.lastLatencyCheck {
+                return lastCheck < tenMinutesAgo
+            }
+            return true
+        }
+        
+        guard !videosToCheck.isEmpty else { return }
+        
+        DebugLogger.shared.info("Checking availability for \(videosToCheck.count) live streams")
+        
+        await withTaskGroup(of: Void.self) { group in
+            var activeTasks = 0
+            let maxConcurrency = 10
+            
+            for video in videosToCheck {
+                if Task.isCancelled { break }
+                
+                if activeTasks >= maxConcurrency {
+                    await group.next()
+                    activeTasks -= 1
+                }
+                
+                group.addTask {
+                    await self.checkLatency(for: video)
+                }
+                activeTasks += 1
+            }
+        }
+    }
+
+    func checkLatency(for video: Video) async {
+        // Don't check latency for local files
+        if video.url.isFileURL || video.cachedURL != nil { return }
+        
+        let start = Date()
+        var request = URLRequest(url: video.url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 5
+        
+        do {
+            let (_, _) = try await URLSession.shared.data(for: request)
+            let duration = Date().timeIntervalSince(start) * 1000 // ms
+            
+            await MainActor.run {
+                if let index = self.videos.firstIndex(where: { $0.id == video.id }) {
+                    self.videos[index].latency = duration
+                    self.videos[index].lastLatencyCheck = Date()
+                    // Re-group to update UI
+                    self.groupVideos(self.videos)
+                }
+            }
+        } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
+            
+            await MainActor.run {
+                if let index = self.videos.firstIndex(where: { $0.id == video.id }) {
+                    self.videos[index].latency = -1 // Error/Timeout
+                    self.videos[index].lastLatencyCheck = Date()
+                    self.groupVideos(self.videos)
+                }
+            }
+        }
     }
 }

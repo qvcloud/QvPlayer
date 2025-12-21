@@ -33,6 +33,13 @@ class PlayerViewModel: ObservableObject {
         waitingReasonObserver?.invalidate()
     }
     
+    func stop() {
+        pause()
+        player = nil
+        statusTimer?.invalidate()
+        statusTimer = nil
+    }
+    
     init() {
         setupAudioSession()
         setupRemoteCommands()
@@ -244,6 +251,15 @@ class PlayerViewModel: ObservableObject {
                 case .playing:
                     print("▶️ [Player] Playing")
                     DebugLogger.shared.info("Player Playing")
+                    
+                    var stats = DebugLogger.shared.videoStats
+                    stats.isOnline = true
+                    
+                    // Update Server Address from Access Log
+                    if let event = player.currentItem?.accessLog()?.events.last {
+                        stats.serverAddress = event.serverAddress ?? "-"
+                    }
+                    DebugLogger.shared.videoStats = stats
                 @unknown default:
                     break
                 }
@@ -295,13 +311,6 @@ class PlayerViewModel: ObservableObject {
         player.seek(to: newTime)
     }
     
-    func stop() {
-        pause()
-        player = nil
-        statusTimer?.invalidate()
-        statusTimer = nil
-    }
-    
     private func startStatusBroadcasting() {
         statusTimer?.invalidate()
         statusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -313,11 +322,21 @@ class PlayerViewModel: ObservableObject {
     
     private func broadcastStatus() {
         let duration = player?.currentItem?.duration.seconds ?? 0
+        
+        var serverAddress = "-"
+        if let event = player?.currentItem?.accessLog()?.events.last {
+            serverAddress = event.serverAddress ?? "-"
+        }
+        
+        let currentTime = player?.currentTime().seconds ?? 0
+        
         let status: [String: Any] = [
             "isPlaying": isPlaying,
             "title": currentVideo?.title ?? "Idle",
-            "currentTime": player?.currentTime().seconds ?? 0,
-            "duration": duration.isNaN ? 0 : duration
+            "currentTime": currentTime.isNaN ? 0 : currentTime,
+            "duration": duration.isNaN ? 0 : duration,
+            "serverAddress": serverAddress,
+            "isOnline": isPlaying // Simple approximation for System Player
         ]
         NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
     }

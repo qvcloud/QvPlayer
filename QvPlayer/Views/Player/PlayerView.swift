@@ -2,6 +2,7 @@ import SwiftUI
 import AVKit
 
 struct PlayerView: View {
+    @Environment(\.dismiss) private var dismiss
     let video: Video
     @AppStorage("playerEngine") private var playerEngine = "system"
     @StateObject private var viewModel = PlayerViewModel()
@@ -13,7 +14,7 @@ struct PlayerView: View {
     @State private var autoHideTask: DispatchWorkItem?
     
     enum FocusField {
-        case rewind, playPause, fastForward, ksPlayer
+        case rewind, playPause, fastForward, ksPlayer, systemPlayer
     }
     @FocusState private var focusedField: FocusField?
     
@@ -56,9 +57,11 @@ struct PlayerView: View {
         #endif
         .onAppear {
             print("▶️ [PlayerView] Current Engine: \(playerEngine)")
-            if playerEngine == "ksplayer" {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                if playerEngine == "ksplayer" {
                     focusedField = .ksPlayer
+                } else {
+                    focusedField = .systemPlayer
                 }
             }
         }
@@ -84,6 +87,12 @@ struct PlayerView: View {
                 showTips(message: message)
             }
         }
+        .onExitCommand {
+            dismiss()
+        }
+        .onDisappear {
+            viewModel.stop()
+        }
     }
     
     var ksPlayerContent: some View {
@@ -99,6 +108,9 @@ struct PlayerView: View {
                 handleMoveCommand(direction: direction) {
                     NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": $0])
                 }
+            }
+            .onExitCommand {
+                dismiss()
             }
             .onTapGesture {
                 toggleControls(engine: "ksplayer")
@@ -131,6 +143,11 @@ struct PlayerView: View {
                 SystemVideoPlayer(player: player)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .edgesIgnoringSafeArea(.all)
+                    .focusable()
+                    .focused($focusedField, equals: .systemPlayer)
+                    .onExitCommand {
+                        dismiss()
+                    }
                     .overlay {
                         if viewModel.isBuffering {
                             ZStack {

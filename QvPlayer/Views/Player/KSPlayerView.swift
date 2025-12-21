@@ -154,11 +154,16 @@ struct KSPlayerView: UIViewRepresentable {
             guard let playerLayer = playerLayer else { return }
             let player = playerLayer.player
             
+            let currentTime = player.currentPlaybackTime
+            let duration = player.duration
+            
             let status: [String: Any] = [
                 "isPlaying": player.isPlaying,
                 "title": playerLayer.url.lastPathComponent,
-                "currentTime": player.currentPlaybackTime,
-                "duration": player.duration
+                "currentTime": currentTime.isNaN ? 0 : currentTime,
+                "duration": duration.isNaN ? 0 : duration,
+                "serverAddress": "Remote", // KSPlayer placeholder
+                "isOnline": player.isPlaying || player.duration > 0
             ]
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
             
@@ -182,6 +187,11 @@ struct KSPlayerView: UIViewRepresentable {
                 // Calculate Download Speed
                 let currentTime = Date().timeIntervalSince1970
                 var currentBytes: Int64 = 0
+                
+                // Update Online Status
+                stats.isOnline = player.isPlaying || player.duration > 0
+                stats.serverAddress = "Remote" // Placeholder
+                
                 if let dynamicInfo = player.dynamicInfo {
                     currentBytes = dynamicInfo.bytesRead
                 }

@@ -8,13 +8,13 @@ struct HomeView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             TabView(selection: $selectedTab) {
-                VideoListView(groups: viewModel.localVideoGroups, isLoading: viewModel.isLoading, title: "Local Files", showVersion: false)
+                VideoListView(viewModel: viewModel, groups: viewModel.localVideoGroups, isLoading: viewModel.isLoading, title: "Local Files", showVersion: false)
                     .tabItem {
                         Label("Local", systemImage: "folder")
                     }
                     .tag(0)
                 
-                VideoListView(groups: viewModel.liveVideoGroups, isLoading: viewModel.isLoading, title: "Live Streams", showVersion: false)
+                VideoListView(viewModel: viewModel, groups: viewModel.liveVideoGroups, isLoading: viewModel.isLoading, title: "Live Streams", showVersion: false)
                     .tabItem {
                         Label("Live", systemImage: "antenna.radiowaves.left.and.right")
                     }
@@ -25,6 +25,18 @@ struct HomeView: View {
                         Label("Settings", systemImage: "gear")
                     }
                     .tag(2)
+            }
+            .onChange(of: selectedTab) { newValue in
+                if newValue == 1 {
+                    viewModel.startLiveStreamsCheck()
+                } else {
+                    viewModel.stopLiveStreamsCheck()
+                }
+            }
+            .onChange(of: navigationPath) { newPath in
+                if !newPath.isEmpty {
+                    viewModel.stopLiveStreamsCheck()
+                }
             }
             .navigationDestination(for: Video.self) { video in
                 PlayerView(video: video)
@@ -44,6 +56,7 @@ struct HomeView: View {
 }
 
 struct VideoListView: View {
+    @ObservedObject var viewModel: HomeViewModel
     let groups: [VideoGroup]
     let isLoading: Bool
     let title: String
@@ -52,110 +65,142 @@ struct VideoListView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title)
-                        .font(.largeTitle)
-                        .fontWeight(.heavy)
-                        .foregroundStyle(.primary)
-                    
-                    if showVersion {
-                        Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.leading)
-                .padding(.top)
+                headerView
                 
                 if isLoading {
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading...")
-                            .progressViewStyle(.circular)
-                            .tint(.primary)
-                        Spacer()
-                    }
-                    .padding(.top, 100)
+                    loadingView
                 } else if groups.isEmpty {
-                    HStack {
-                        Spacer()
-                        VStack(spacing: 12) {
-                            Image(systemName: "video.slash")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                            Text("No videos found")
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.top, 100)
+                    emptyView
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 500), spacing: 40)], spacing: 40, pinnedViews: [.sectionHeaders]) {
-                        ForEach(groups) { group in
-                            Section(header: 
-                                HStack {
-                                    Text(group.name)
-                                        .font(.title2)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(.primary)
-                                        .padding(.vertical, 12)
-                                        .padding(.leading, 20)
-                                    Spacer()
-                                    
-                                    Menu {
-                                        Button(role: .destructive) {
-                                            PlaylistManager.shared.deleteGroup(group.name)
-                                        } label: {
-                                            Label("Delete Group", systemImage: "trash")
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                            .font(.title3)
-                                            .foregroundStyle(.secondary)
-                                            .padding(.trailing, 20)
-                                            .padding(.vertical, 12)
-                                            .contentShape(Rectangle())
-                                    }
-                                }
-                                .background(.regularMaterial)
-                            ) {
-                                ForEach(group.videos) { video in
-                                    NavigationLink(value: video) {
-                                        VideoCard(video: video)
-                                    }
-                                    .buttonStyle(.card)
-                                    .contextMenu {
-                                        if video.cachedURL == nil {
-                                            Button {
-                                                Task {
-                                                    _ = try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
-                                                    NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
-                                                }
-                                            } label: {
-                                                Label("Cache Locally", systemImage: "arrow.down.circle")
-                                            }
-                                        } else {
-                                            Button(role: .destructive) {
-                                                CacheManager.shared.removeCachedVideo(url: video.url)
-                                                NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
-                                            } label: {
-                                                Label("Remove Cache", systemImage: "trash")
-                                            }
-                                        }
-                                        
-                                        Button(role: .destructive) {
-                                            PlaylistManager.shared.deleteVideo(video)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash.fill")
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    videoGridView
+                }
+            }
+        }
+    }
+    
+    private var headerView: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title)
+                .font(.largeTitle)
+                .fontWeight(.heavy)
+                .foregroundStyle(.primary)
+            
+            if showVersion {
+                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0")")
+                    .font(.title3)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.leading)
+        .padding(.top)
+    }
+    
+    private var loadingView: some View {
+        HStack {
+            Spacer()
+            ProgressView("Loading...")
+                .progressViewStyle(.circular)
+                .tint(.primary)
+            Spacer()
+        }
+        .padding(.top, 100)
+    }
+    
+    private var emptyView: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: 12) {
+                Image(systemName: "video.slash")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("No videos found")
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(.top, 100)
+    }
+    
+    private var videoGridView: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 500), spacing: 40)], spacing: 40) {
+            ForEach(groups) { group in
+                Section(header: groupHeader(for: group)) {
+                    ForEach(group.videos) { video in
+                        videoItem(for: video)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom)
+    }
+    
+    private func groupHeader(for group: VideoGroup) -> some View {
+        HStack {
+            Text(group.name)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+                .padding(.vertical, 12)
+                .padding(.leading, 20)
+            Spacer()
+            
+            Menu {
+                Button(role: .destructive) {
+                    PlaylistManager.shared.deleteGroup(group.name)
+                } label: {
+                    Label("Delete Group", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 20)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+            }
+        }
+        .background(.regularMaterial)
+    }
+    
+    private func videoItem(for video: Video) -> some View {
+        NavigationLink(value: video) {
+            VideoCard(video: video)
+        }
+        .buttonStyle(.card)
+        .contextMenu {
+            if video.cachedURL == nil {
+                Button {
+                    Task {
+                        _ = try? await CacheManager.shared.cacheNetworkVideo(url: video.url)
+                        NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                    }
+                } label: {
+                    Label("Cache Locally", systemImage: "arrow.down.circle")
+                }
+            } else {
+                Button(role: .destructive) {
+                    CacheManager.shared.removeCachedVideo(url: video.url)
+                    NotificationCenter.default.post(name: .playlistDidUpdate, object: nil)
+                } label: {
+                    Label("Remove Cache", systemImage: "trash")
+                }
+            }
+            
+            Button(role: .destructive) {
+                PlaylistManager.shared.deleteVideo(video)
+            } label: {
+                Label("Delete", systemImage: "trash.fill")
+            }
+            
+            if video.cachedURL == nil && !video.url.isFileURL {
+                Button {
+                    Task {
+                        await viewModel.checkLatency(for: video)
+                    }
+                } label: {
+                    Label("Check Speed", systemImage: "speedometer")
                 }
             }
         }
@@ -178,6 +223,20 @@ struct VideoCard: View {
                         .padding(6)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
+                        .padding(6)
+                } else if let latency = video.latency {
+                    Text(latency < 0 ? "Timeout" : "\(Int(latency))ms")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            latency < 0 ? Color.red :
+                            latency < 200 ? Color.green :
+                            latency < 500 ? Color.orange : Color.red
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                         .padding(6)
                 }
             }

@@ -9,8 +9,10 @@ struct Video: Identifiable, Hashable, Codable {
     var description: String?
     var thumbnailURL: URL?
     var cachedURL: URL?
+    var latency: Double?
+    var lastLatencyCheck: Date?
     
-    init(id: UUID = UUID(), title: String, url: URL, group: String? = nil, isLive: Bool = false, description: String? = nil, thumbnailURL: URL? = nil, cachedURL: URL? = nil) {
+    init(id: UUID = UUID(), title: String, url: URL, group: String? = nil, isLive: Bool = false, description: String? = nil, thumbnailURL: URL? = nil, cachedURL: URL? = nil, latency: Double? = nil, lastLatencyCheck: Date? = nil) {
         self.id = id
         self.title = title
         self.url = url
@@ -19,5 +21,7 @@ struct Video: Identifiable, Hashable, Codable {
         self.description = description
         self.thumbnailURL = thumbnailURL
         self.cachedURL = cachedURL
+        self.latency = latency
+        self.lastLatencyCheck = lastLatencyCheck
     }
 }

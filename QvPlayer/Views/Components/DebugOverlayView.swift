@@ -54,6 +54,10 @@ struct DebugOverlayView: View {
                             }
                             GridRow {
                                 StatRow(title: "Dropped", value: "\(logger.videoStats.dropFrames)")
+                                StatRow(title: "Server", value: logger.videoStats.serverAddress)
+                            }
+                            GridRow {
+                                StatRow(title: "Status", value: logger.videoStats.isOnline ? "Online" : "Offline")
                                 Color.clear
                             }
                         }
@@ -91,8 +95,11 @@ struct DebugOverlayView: View {
                         }
                         .onChange(of: logger.logs.count) { _ in
                             if let lastId = logger.logs.last?.id {
-                                withAnimation {
-                                    proxy.scrollTo(lastId, anchor: .bottom)
+                                // Use a slight delay to ensure the view has updated
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation {
+                                        proxy.scrollTo(lastId, anchor: .bottom)
+                                    }
                                 }
                             }
                         }

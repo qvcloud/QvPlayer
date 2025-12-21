@@ -288,6 +288,16 @@ struct WebAssets {
                         <div class="status-value" id="nowPlayingText">-</div>
                         <div class="time-display" id="timeText">00:00</div>
                         <div id="statusText" style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);">Idle</div>
+                        <div id="connectionInfo" style="font-size: 11px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; display: none;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                <span style="color: var(--secondary-text);">Server:</span>
+                                <span id="serverAddress" style="font-family: monospace;">-</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span style="color: var(--secondary-text);">Status:</span>
+                                <span id="onlineStatus">-</span>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="remote-grid">
@@ -325,9 +335,6 @@ struct WebAssets {
                                 <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
                                 <button class="filter-btn" id="filter-local" onclick="setFilter('local')">Local</button>
                                 <button class="filter-btn" id="filter-live" onclick="setFilter('live')">Live</button>
-                                <select id="groupFilter" onchange="renderPlaylist()" style="margin-left: 4px; padding: 4px 8px; border-radius: 6px; border: none; background: none; font-size: 13px; color: var(--text-color); cursor: pointer;">
-                                    <option value="all">All Groups</option>
-                                </select>
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <div id="batchToolbar" style="display: none; gap: 8px;">
@@ -344,7 +351,10 @@ struct WebAssets {
                         </div>
                         <div style="padding: 8px 16px; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center;">
                             <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="margin-right: 12px;">
-                            <label for="selectAll" style="font-size: 14px; color: var(--secondary-text);">Select All</label>
+                            <label for="selectAll" style="font-size: 14px; color: var(--secondary-text); margin-right: 16px;">Select All</label>
+                            <select id="groupFilter" onchange="renderPlaylist()" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #d2d2d7; background: white; font-size: 13px; color: var(--text-color); cursor: pointer;">
+                                <option value="all">All Groups</option>
+                            </select>
                         </div>
                         <ul id="playlist" class="video-list">
                             <!-- Items loaded via JS -->
@@ -820,6 +830,21 @@ struct WebAssets {
                             };
                             document.getElementById('timeText').textContent = 
                                 `${formatTime(data.currentTime)} / ${formatTime(data.duration)}`;
+                                
+                            // Update Connection Info
+                            const connInfo = document.getElementById('connectionInfo');
+                            if (data.serverAddress && data.serverAddress !== '-') {
+                                connInfo.style.display = 'block';
+                                document.getElementById('serverAddress').textContent = data.serverAddress;
+                                
+                                const statusSpan = document.getElementById('onlineStatus');
+                                const isOnline = data.isOnline === true;
+                                statusSpan.textContent = isOnline ? 'Online' : 'Offline';
+                                statusSpan.style.color = isOnline ? '#34c759' : '#ff3b30';
+                                statusSpan.style.fontWeight = '600';
+                            } else {
+                                connInfo.style.display = 'none';
+                            }
                                 
                             // Update Play/Pause Button Icon
                             const btn = document.getElementById('playPauseBtn');

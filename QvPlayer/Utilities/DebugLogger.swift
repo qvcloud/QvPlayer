@@ -20,6 +20,8 @@ class DebugLogger: ObservableObject {
         var dropFrames: Int = 0
         var downloadSpeed: Double = 0.0
         var bufferDuration: Double = 0.0
+        var serverAddress: String = "-"
+        var isOnline: Bool = false
     }
     
     enum LogType {
