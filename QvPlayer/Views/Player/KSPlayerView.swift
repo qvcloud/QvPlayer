@@ -106,7 +106,7 @@ struct KSPlayerView: UIViewRepresentable {
     static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
         #if canImport(KSPlayer)
         coordinator.playerLayer?.pause()
-        // coordinator.playerLayer?.reset() // reset() not available
+        coordinator.stop()
         #endif
     }
     
@@ -135,6 +135,11 @@ struct KSPlayerView: UIViewRepresentable {
         deinit {
             statusTimer?.invalidate()
             NotificationCenter.default.removeObserver(self)
+        }
+        
+        func stop() {
+            statusTimer?.invalidate()
+            broadcastStatus()
         }
         
         private func setupRemoteCommands() {

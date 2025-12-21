@@ -35,6 +35,9 @@ class PlayerViewModel: ObservableObject {
     
     func stop() {
         pause()
+        // Broadcast final stopped status
+        broadcastStatus()
+        
         player = nil
         statusTimer?.invalidate()
         statusTimer = nil

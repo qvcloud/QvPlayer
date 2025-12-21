@@ -475,6 +475,8 @@ class MediaManager: ObservableObject {
     
     func clearPlayQueue() {
         DatabaseManager.shared.clearPlayQueue()
+        self.isPlayerPlaying = false
+        self.currentPlayingVideoId = nil
         notifyUpdate()
         NotificationCenter.default.post(name: .queueDidFinish, object: nil)
     }
