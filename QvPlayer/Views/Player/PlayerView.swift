@@ -50,6 +50,10 @@ struct PlayerView: View {
                 .zIndex(100)
             }
         }
+        .ignoresSafeArea()
+        #if os(iOS)
+        .navigationBarHidden(true)
+        #endif
         .onAppear {
             print("▶️ [PlayerView] Current Engine: \(playerEngine)")
             if playerEngine == "ksplayer" {
@@ -84,6 +88,8 @@ struct PlayerView: View {
     
     var ksPlayerContent: some View {
         KSPlayerView(video: video)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
             .focusable()
             .focused($focusedField, equals: .ksPlayer)
             .onPlayPauseCommand {
