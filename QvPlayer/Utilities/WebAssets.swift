@@ -358,7 +358,7 @@ struct WebAssets {
                 <!-- Sidebar -->
                 <div class="sidebar">
                     <div class="sidebar-header">
-                        <h2 style="margin-bottom: 12px;">Media Queue</h2>
+                        <h2 style="margin-bottom: 12px;">Playlist Queue</h2>
                         <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--secondary-text);">
                             <label style="display: flex; align-items: center; cursor: pointer; color: var(--text-color);">
                                 <input type="checkbox" id="loopMedia" onchange="toggleLoop(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Loop Playback
@@ -551,6 +551,8 @@ struct WebAssets {
 
             <script>
                 let currentVideos = [];
+                let currentQueue = [];
+                let currentPlayingId = null;
                 let selectedIndices = new Set();
                 let currentPage = 1;
                 const itemsPerPage = 20;
@@ -825,10 +827,8 @@ struct WebAssets {
                             updateGroupFilter();
                             loadGroups();
                             document.getElementById('selectAll').checked = false;
-                            document.getElementById('mediaCount').textContent = currentVideos.length + ' items';
                             currentPage = 1;
                             renderMedia();
-                            renderSidebar();
                         })
                         .catch(err => console.error('Failed to load media:', err));
                 }
@@ -837,32 +837,53 @@ struct WebAssets {
                     const list = document.getElementById('sidebarList');
                     list.innerHTML = '';
                     
-                    currentVideos.forEach((video, index) => {
+                    // Show all items, sorted by sortOrder
+                    const sortedQueue = [...currentQueue].sort((a, b) => a.sortOrder - b.sortOrder);
+                    
+                    sortedQueue.forEach((item, i) => {
+                        const video = item.video;
+                        if (!video) return;
+                        
                         const li = document.createElement('li');
                         li.className = 'video-item sidebar-item';
                         li.style.padding = '10px 16px';
-                        li.style.cursor = 'move';
-                        li.draggable = true;
-                        li.dataset.index = index;
                         li.dataset.id = video.id;
-                        li.ondragstart = handleDragStart;
-                        li.ondragover = handleDragOver;
-                        li.ondrop = handleDrop;
+                        li.dataset.queueId = item.id;
+                        
+                        // Styling based on status
+                        if (item.status === 'playing') {
+                            li.style.background = '#e3f2fd'; // Light blue for playing
+                            li.style.borderLeft = '4px solid #2196f3';
+                        } else if (item.status === 'played') {
+                            li.style.opacity = '0.5';
+                            li.style.background = '#f5f5f5'; // Gray for played
+                            li.style.color = '#888';
+                        }
                         
                         li.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-                                <div style="color: #ccc; font-size: 12px; width: 20px;">${index + 1}</div>
+                                <div style="color: #ccc; font-size: 12px; width: 20px;">${item.sortOrder}</div>
                                 <div class="video-info" style="margin-right: 0;">
                                     <div class="video-title" style="font-size: 13px; margin-bottom: 2px;">${escapeHtml(video.title)}</div>
                                     <div class="video-meta" style="font-size: 11px;">${escapeHtml(video.group || 'Default')}</div>
                                 </div>
                             </div>
-                            <button class="icon-btn" onclick="playVideo(${index})" style="padding: 4px;">
+                            ${item.status !== 'played' ? `
+                            <button class="icon-btn" onclick="playQueueVideo('${video.id}')" style="padding: 4px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                             </button>
+                            ` : ''}
                         `;
                         list.appendChild(li);
                     });
+                }
+                
+                function playQueueVideo(videoId) {
+                    // Find index in main list to play
+                    const index = currentVideos.findIndex(v => v.id === videoId);
+                    if (index !== -1) {
+                        playVideo(index);
+                    }
                 }
                 
                 function loadGroups() {
@@ -1045,6 +1066,11 @@ struct WebAssets {
                             <div class="action-group">
                                 <button class="icon-btn" onclick="playVideo(${index})" title="Play">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                                </button>
+                                <button class="icon-btn" onclick="addToQueue(${index})" title="Add to Queue">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 5v14M5 12h14"/>
+                                    </svg>
                                 </button>
                                 <button class="icon-btn" onclick="openEdit(${index})" title="Edit">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1231,6 +1257,25 @@ struct WebAssets {
                     });
                 }
                 
+                function addToQueue(index) {
+                    const video = currentVideos[index];
+                    if (!video) return;
+                    
+                    fetch('/api/v1/queue', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            videoId: video.id
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.success) {
+                            alert('Failed to add to queue: ' + (res.message || 'Unknown error'));
+                        }
+                    });
+                }
+                
                 function playVideo(index) {
                     fetch('/api/v1/control/play_video?index=' + index, { method: 'POST' });
                 }
@@ -1346,6 +1391,18 @@ struct WebAssets {
                             } else {
                                 btn.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
                             }
+                            
+                            // Update Queue from Status
+                            if (data.queue) {
+                                currentQueue = data.queue;
+                                document.getElementById('mediaCount').textContent = currentQueue.length + ' items';
+                                renderSidebar();
+                            }
+                            
+                            // Update Current Playing ID
+                            if (data.id !== currentPlayingId) {
+                                currentPlayingId = data.id || null;
+                            }
 
                             // Highlight Sidebar Item
                             document.querySelectorAll('.sidebar-item').forEach(el => {
@@ -1356,6 +1413,8 @@ struct WebAssets {
                             });
                             
                             // Loop Logic
+                            // Disabled client-side loop logic as it is now handled by the server queue
+                            /*
                             if (loopEnabled && data.duration > 0 && data.id) {
                                 const now = Date.now();
                                 if (now - lastLoopTime < 5000) return; // Debounce 5s
@@ -1373,6 +1432,7 @@ struct WebAssets {
                                     }
                                 }
                             }
+                            */
                         })
                         .catch(console.error);
                 }

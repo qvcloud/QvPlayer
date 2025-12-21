@@ -120,6 +120,54 @@ class DatabaseManager {
         }
         sqlite3_finalize(createTableStatement)
         
+        // Create Play Queue Table
+        // Drop old table to enforce new schema
+        sqlite3_exec(db, "DROP TABLE IF EXISTS play_queue;", nil, nil, nil)
+        
+        let createQueueTableString = """
+        CREATE TABLE IF NOT EXISTS play_queue(
+            id TEXT PRIMARY KEY,
+            video_id TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            loop INTEGER DEFAULT 0
+        );
+        """
+        DebugLogger.shared.info("📝 [SQL] Executing: \(createQueueTableString)")
+        var createQueueStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, createQueueTableString, -1, &createQueueStmt, nil) == SQLITE_OK {
+            if sqlite3_step(createQueueStmt) == SQLITE_DONE {
+                // Table created
+            } else {
+                DebugLogger.shared.error("Table play_queue could not be created.")
+            }
+        } else {
+            DebugLogger.shared.error("CREATE TABLE play_queue statement could not be prepared.")
+        }
+        sqlite3_finalize(createQueueStmt)
+        
+        // Create Batches Table
+        let createBatchesTableString = """
+        CREATE TABLE IF NOT EXISTS batches(
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            is_looping INTEGER DEFAULT 0,
+            created_at REAL
+        );
+        """
+        DebugLogger.shared.info("📝 [SQL] Executing: \(createBatchesTableString)")
+        var createBatchesStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, createBatchesTableString, -1, &createBatchesStmt, nil) == SQLITE_OK {
+            if sqlite3_step(createBatchesStmt) == SQLITE_DONE {
+                // Table created
+            } else {
+                DebugLogger.shared.error("Table batches could not be created.")
+            }
+        } else {
+            DebugLogger.shared.error("CREATE TABLE batches statement could not be prepared.")
+        }
+        sqlite3_finalize(createBatchesStmt)
+        
         migrateSchema()
         
         // Migration: Rename videos to library if it exists and library is empty
@@ -591,4 +639,213 @@ class DatabaseManager {
     deinit {
         sqlite3_close(db)
     }
+    
+    // MARK: - Play Queue Management
+    
+    func addPlayQueueItem(_ item: PlayQueueItem) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let insertSQL = "INSERT INTO play_queue (id, video_id, sort_order, status, loop) VALUES (?, ?, ?, ?, ?);"
+            var stmt: OpaquePointer?
+            
+            if sqlite3_prepare_v2(db, insertSQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (item.id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (item.videoId.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 3, Int32(item.sortOrder))
+                sqlite3_bind_text(stmt, 4, (item.status.rawValue as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 5, item.isLooping ? 1 : 0)
+                
+                if sqlite3_step(stmt) != SQLITE_DONE {
+                    DebugLogger.shared.error("Error inserting play queue item")
+                }
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func getPlayQueue() -> [PlayQueueItem] {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return [] }
+            
+            let querySQL = """
+            SELECT q.id, q.video_id, q.sort_order, q.status, q.loop,
+                   l.id, l.title, l.url, l.group_name, l.is_live, l.description, l.thumbnail_url, l.cached_url, l.latency, l.last_check, l.sort_order, l.file_size, l.creation_date
+            FROM play_queue q
+            LEFT JOIN library l ON q.video_id = l.id
+            ORDER BY q.sort_order ASC;
+            """
+            
+            var stmt: OpaquePointer?
+            var items: [PlayQueueItem] = []
+            
+            if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    // Queue Item Fields
+                    guard let qIdStr = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }),
+                          let qId = UUID(uuidString: qIdStr),
+                          let vIdStr = sqlite3_column_text(stmt, 1).map({ String(cString: $0) }),
+                          let vId = UUID(uuidString: vIdStr) else {
+                        continue
+                    }
+                    
+                    let qSort = Int(sqlite3_column_int(stmt, 2))
+                    let statusStr = sqlite3_column_text(stmt, 3).map({ String(cString: $0) }) ?? "pending"
+                    let status = PlayQueueStatus(rawValue: statusStr) ?? .pending
+                    let isLooping = sqlite3_column_int(stmt, 4) != 0
+                    
+                    // Video Fields (Joined)
+                    var video: Video? = nil
+                    if let lIdStr = sqlite3_column_text(stmt, 5).map({ String(cString: $0) }),
+                       let lId = UUID(uuidString: lIdStr),
+                       let title = sqlite3_column_text(stmt, 6).map({ String(cString: $0) }),
+                       let urlStr = sqlite3_column_text(stmt, 7).map({ String(cString: $0) }),
+                       let url = URL(string: urlStr) {
+                        
+                        let group = sqlite3_column_text(stmt, 8).map({ String(cString: $0) })
+                        let isLive = sqlite3_column_int(stmt, 9) != 0
+                        let desc = sqlite3_column_text(stmt, 10).map({ String(cString: $0) })
+                        let thumb = sqlite3_column_text(stmt, 11).map({ String(cString: $0) }).flatMap { URL(string: $0) }
+                        let cached = sqlite3_column_text(stmt, 12).map({ String(cString: $0) }).flatMap { URL(string: $0) }
+                        
+                        var latency: Double?
+                        if sqlite3_column_type(stmt, 13) != SQLITE_NULL {
+                            latency = sqlite3_column_double(stmt, 13)
+                        }
+                        
+                        var lastCheck: Date?
+                        if sqlite3_column_type(stmt, 14) != SQLITE_NULL {
+                            lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 14))
+                        }
+                        
+                        let lSort = Int(sqlite3_column_int(stmt, 15))
+                        
+                        var fileSize: Int64?
+                        if sqlite3_column_type(stmt, 16) != SQLITE_NULL {
+                            fileSize = sqlite3_column_int64(stmt, 16)
+                        }
+                        
+                        var creationDate: Date?
+                        if sqlite3_column_type(stmt, 17) != SQLITE_NULL {
+                            creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 17))
+                        }
+                        
+                        video = Video(id: lId, title: title, url: url, group: group, isLive: isLive, description: desc, thumbnailURL: thumb, cachedURL: cached, latency: latency, lastLatencyCheck: lastCheck, sortOrder: lSort, fileSize: fileSize, creationDate: creationDate)
+                    }
+                    
+                    items.append(PlayQueueItem(id: qId, videoId: vId, sortOrder: qSort, status: status, isLooping: isLooping, video: video))
+                }
+            }
+            sqlite3_finalize(stmt)
+            return items
+        }
+    }
+    
+    func updatePlayQueueStatus(id: UUID, status: PlayQueueStatus) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "UPDATE play_queue SET status = ? WHERE id = ?;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (status.rawValue as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func updatePlayQueueSortOrder(id: UUID, sortOrder: Int) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "UPDATE play_queue SET sort_order = ? WHERE id = ?;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int(stmt, 1, Int32(sortOrder))
+                sqlite3_bind_text(stmt, 2, (id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func clearPlayQueue() {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "DELETE FROM play_queue;"
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    // MARK: - Batch Management
+    
+    func createBatch(id: String, name: String, isLooping: Bool) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "INSERT OR REPLACE INTO batches (id, name, is_looping, created_at) VALUES (?, ?, ?, ?);"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 2, (name as NSString).utf8String, -1, nil)
+                sqlite3_bind_int(stmt, 3, isLooping ? 1 : 0)
+                sqlite3_bind_double(stmt, 4, Date().timeIntervalSince1970)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+    
+    func getBatch(id: String) -> (name: String, isLooping: Bool)? {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return nil }
+            
+            let sql = "SELECT name, is_looping FROM batches WHERE id = ?;"
+            var stmt: OpaquePointer?
+            var result: (String, Bool)?
+            
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                if sqlite3_step(stmt) == SQLITE_ROW {
+                    if let name = sqlite3_column_text(stmt, 0).map({ String(cString: $0) }) {
+                        let isLooping = sqlite3_column_int(stmt, 1) != 0
+                        result = (name, isLooping)
+                    }
+                }
+            }
+            sqlite3_finalize(stmt)
+            return result
+        }
+    }
+    
+    func deleteBatch(id: String) {
+        queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return }
+            
+            let sql = "DELETE FROM batches WHERE id = ?;"
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
+                sqlite3_step(stmt)
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
 }
+

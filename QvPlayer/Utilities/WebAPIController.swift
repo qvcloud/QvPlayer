@@ -39,7 +39,33 @@ class WebAPIController {
     }
     
     func handleGetStatus(currentStatus: [String: Any]) -> String? {
-        if let data = try? JSONSerialization.data(withJSONObject: currentStatus) {
+        var status = currentStatus
+        
+        // Add Queue Data
+        let items = MediaManager.shared.getPlayQueue()
+        let jsonItems = items.map { item -> [String: Any] in
+            var dict: [String: Any] = [
+                "id": item.id.uuidString,
+                "videoId": item.videoId.uuidString,
+                "sortOrder": item.sortOrder,
+                "status": item.status.rawValue,
+                "isLooping": item.isLooping
+            ]
+            
+            if let video = item.video {
+                dict["video"] = [
+                    "title": video.title,
+                    "url": video.url.absoluteString,
+                    "group": video.group ?? "",
+                    "isLive": video.isLive
+                ]
+            }
+            
+            return dict
+        }
+        status["queue"] = jsonItems
+        
+        if let data = try? JSONSerialization.data(withJSONObject: status) {
             return String(data: data, encoding: .utf8)
         }
         return nil
@@ -191,5 +217,98 @@ class WebAPIController {
         }
         
         return (true, nil)
+    }
+    
+    // MARK: - Queue Handlers
+    
+    func handleGetQueue(queryItems: [URLQueryItem]) -> String? {
+        let items = MediaManager.shared.getPlayQueue()
+        
+        let jsonItems = items.map { item -> [String: Any] in
+            var dict: [String: Any] = [
+                "id": item.id.uuidString,
+                "videoId": item.videoId.uuidString,
+                "sortOrder": item.sortOrder,
+                "status": item.status.rawValue,
+                "isLooping": item.isLooping
+            ]
+            
+            if let video = item.video {
+                dict["video"] = [
+                    "title": video.title,
+                    "url": video.url.absoluteString,
+                    "group": video.group ?? "",
+                    "isLive": video.isLive
+                ]
+            }
+            
+            return dict
+        }
+        
+        if let data = try? JSONSerialization.data(withJSONObject: jsonItems, options: .prettyPrinted) {
+            return String(data: data, encoding: .utf8)
+        }
+        return nil
+    }
+    
+    func handleAddToQueue(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (false, "Invalid JSON")
+        }
+        
+        let isLooping = json["isLooping"] as? Bool ?? false
+        
+        // Option 1: Add single video by ID
+        if let videoIdStr = json["videoId"] as? String,
+           let videoId = UUID(uuidString: videoIdStr) {
+            // Find video
+            if let video = MediaManager.shared.getVideos().first(where: { $0.id == videoId }) {
+                MediaManager.shared.addToPlayQueue(video: video, isLooping: isLooping)
+                return (true, nil)
+            } else {
+                return (false, "Video not found")
+            }
+        }
+        
+        // Option 2: Replace queue with list of video IDs
+        if let videoIds = json["videoIds"] as? [String] {
+            let allVideos = MediaManager.shared.getVideos()
+            var videosToAdd: [Video] = []
+            
+            for idStr in videoIds {
+                if let uuid = UUID(uuidString: idStr),
+                   let video = allVideos.first(where: { $0.id == uuid }) {
+                    videosToAdd.append(video)
+                }
+            }
+            
+            MediaManager.shared.replaceQueue(videos: videosToAdd, isLooping: isLooping)
+            return (true, nil)
+        }
+        
+        return (false, "Missing videoId or videoIds")
+    }
+    
+    func handleClearQueue(queryItems: [URLQueryItem]) -> (success: Bool, message: String?) {
+        MediaManager.shared.clearPlayQueue()
+        return (true, nil)
+    }
+    
+    func handleUpdateQueueSortOrder(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let idStr = json["id"] as? String,
+              let id = UUID(uuidString: idStr),
+              let newOrder = json["sortOrder"] as? Int else {
+            return (false, "Invalid JSON or missing fields")
+        }
+        
+        do {
+            try MediaManager.shared.updateQueueItemSortOrder(id: id, newSortOrder: newOrder)
+            return (true, nil)
+        } catch {
+            return (false, "Failed to update queue sort order: \(error.localizedDescription)")
+        }
     }
 }

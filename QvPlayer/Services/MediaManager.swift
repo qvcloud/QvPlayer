@@ -3,81 +3,100 @@ import Foundation
 class MediaManager: ObservableObject {
     static let shared = MediaManager()
     
-    // MARK: - Migration Logic
-    // We keep the old file paths just for migration purposes
-    private let fileName = "playlist.m3u"
-    
-    private var documentsURL: URL {
-        let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return documentsDirectory.appendingPathComponent(fileName)
-    }
-    
-    private var appSupportURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent(fileName)
-    }
-    
-    private var cachesURL: URL {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return caches.appendingPathComponent(fileName)
-    }
-    
-    private var legacyFileURL: URL? {
-        if FileManager.default.fileExists(atPath: documentsURL.path) { return documentsURL }
-        if FileManager.default.fileExists(atPath: appSupportURL.path) { return appSupportURL }
-        if FileManager.default.fileExists(atPath: cachesURL.path) { return cachesURL }
-        return nil
-    }
-    
     init() {
-        migrateFromM3UIfNeeded()
+        setupObservers()
     }
     
-    private func migrateFromM3UIfNeeded() {
-        let videos = DatabaseManager.shared.getAllVideos()
-        if !videos.isEmpty {
-            DebugLogger.shared.info("Database already has videos. Skipping migration.")
-            return
+    private func setupObservers() {
+        NotificationCenter.default.addObserver(forName: .playerStatusDidUpdate, object: nil, queue: .main) { [weak self] notification in
+            self?.handlePlayerStatusUpdate(notification)
         }
         
-        guard let url = legacyFileURL else {
-            DebugLogger.shared.info("No legacy M3U file found. Skipping migration.")
-            return
+        NotificationCenter.default.addObserver(forName: .playerDidFinishPlaying, object: nil, queue: .main) { [weak self] _ in
+            self?.handlePlaybackFinished()
         }
+    }
+    
+    private var currentPlayingVideoId: UUID?
+    private var isPlayerPlaying: Bool = false
+    
+    private func handlePlayerStatusUpdate(_ notification: Notification) {
+        guard let status = notification.userInfo?["status"] as? [String: Any],
+              let isPlaying = status["isPlaying"] as? Bool,
+              let idString = status["id"] as? String,
+              let videoId = UUID(uuidString: idString) else { return }
         
-        DebugLogger.shared.info("Migrating from M3U file at \(url.path)")
+        self.isPlayerPlaying = isPlaying
         
-        do {
-            let content = try String(contentsOf: url, encoding: .utf8)
-            let m3uVideos = MediaService.shared.parseM3U(content: content)
+        if isPlaying && currentPlayingVideoId != videoId {
+            DebugLogger.shared.info("Queue: Player started new video \(videoId)")
+            currentPlayingVideoId = videoId
             
-            // Also fetch old metadata if available to preserve latency info
-            let metadata = DatabaseManager.shared.getAllMetadata()
+            let queue = getPlayQueue()
             
-            for (index, var video) in m3uVideos.enumerated() {
-                // Preserve sort order from M3U order
-                // We assign a sortOrder. Let's say higher is better.
-                // If we want the first item in M3U to be first in list, it should have highest sortOrder.
-                video.sortOrder = m3uVideos.count - index
-                
-                // Restore latency info
-                let urlString = video.url.absoluteString
-                if let data = metadata[urlString] {
-                    video.latency = data.0
-                    video.lastLatencyCheck = data.1
-                }
-                
-                DatabaseManager.shared.addVideo(video)
+            // 1. Mark any previously 'playing' items as 'played' (skipped)
+            // This ensures we don't have multiple playing items
+            for item in queue where item.status == .playing && item.videoId != videoId {
+                DebugLogger.shared.info("Queue: Marking skipped item \(item.id) as played")
+                updateQueueItemStatus(id: item.id, status: .played)
             }
             
-            DebugLogger.shared.info("Migration complete. \(m3uVideos.count) videos imported.")
+            // 2. Mark this video as playing in the queue
+            // We find the first 'pending' item with this videoId
+            // If not found, check if there's a 'played' one (re-playing)
+            if let item = queue.first(where: { $0.videoId == videoId && $0.status == .pending }) {
+                DebugLogger.shared.info("Queue: Marking pending item \(item.id) as playing")
+                updateQueueItemStatus(id: item.id, status: .playing)
+            } else if let item = queue.first(where: { $0.videoId == videoId && $0.status == .played }) {
+                // Re-playing a played item
+                DebugLogger.shared.info("Queue: Marking played item \(item.id) as playing (replay)")
+                updateQueueItemStatus(id: item.id, status: .playing)
+            }
+        }
+    }
+    
+    private func handlePlaybackFinished() {
+        DebugLogger.shared.info("Queue: Playback finished signal received")
+        
+        // 1. Mark current playing item as played
+        let currentQueue = getPlayQueue()
+        if let currentItem = currentQueue.first(where: { $0.status == .playing }) {
+            DebugLogger.shared.info("Queue: Marking current item \(currentItem.id) as played")
+            updateQueueItemStatus(id: currentItem.id, status: .played)
             
-            // Rename old file to .bak
-            let bakURL = url.appendingPathExtension("bak")
-            try? FileManager.default.moveItem(at: url, to: bakURL)
+            // 2. Fetch updated queue to decide next step
+            let updatedQueue = getPlayQueue()
+            let pendingItems = updatedQueue.filter { $0.status == .pending }
             
-        } catch {
-            DebugLogger.shared.error("Error during migration: \(error)")
+            if let nextItem = pendingItems.first {
+                // Play next item
+                if let video = nextItem.video {
+                    DebugLogger.shared.info("Queue: Advancing to next item: \(video.title)")
+                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+                }
+            } else {
+                // Queue finished
+                DebugLogger.shared.info("Queue: No more pending items")
+                
+                if currentItem.isLooping {
+                    DebugLogger.shared.info("Queue: Looping enabled. Resetting queue.")
+                    // Reset all items to pending
+                    for item in updatedQueue {
+                        updateQueueItemStatus(id: item.id, status: .pending)
+                    }
+                    
+                    // Play first item
+                    if let firstItem = updatedQueue.first, let video = firstItem.video {
+                        NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+                    }
+                } else {
+                    DebugLogger.shared.info("Queue finished. Clearing queue data.")
+                    clearPlayQueue()
+                    notifyUpdate()
+                }
+            }
+        } else {
+            DebugLogger.shared.info("Queue: No currently playing item found in queue to mark as finished")
         }
     }
     
@@ -301,12 +320,7 @@ class MediaManager: ObservableObject {
         // 2. Clear Database
         DatabaseManager.shared.deleteAllVideos()
         
-        // 3. Delete Legacy Playlist Files (from all possible locations)
-        try? FileManager.default.removeItem(at: documentsURL)
-        try? FileManager.default.removeItem(at: appSupportURL)
-        try? FileManager.default.removeItem(at: cachesURL)
-        
-        // 4. Notify UI
+        // 3. Notify UI
         notifyUpdate()
     }
 
@@ -389,6 +403,104 @@ class MediaManager: ObservableObject {
         }
         
         notifyUpdate()
+    }
+    
+    // MARK: - Play Queue
+    
+    func addToPlayQueue(video: Video, isLooping: Bool = false) {
+        DebugLogger.shared.info("Queue: Adding video \(video.title) to queue")
+        let queue = getPlayQueue()
+        let maxSort = queue.map { $0.sortOrder }.max() ?? 0
+        let newSort = maxSort + 1
+        
+        let item = PlayQueueItem(videoId: video.id, sortOrder: newSort, status: .pending, isLooping: isLooping)
+        DatabaseManager.shared.addPlayQueueItem(item)
+        notifyUpdate()
+        
+        checkAndStartPlayback()
+    }
+    
+    func replaceQueue(videos: [Video], isLooping: Bool = false) {
+        DebugLogger.shared.info("Queue: Replacing queue with \(videos.count) videos")
+        clearPlayQueue()
+        
+        for (index, video) in videos.enumerated() {
+            let item = PlayQueueItem(videoId: video.id, sortOrder: index, status: .pending, isLooping: isLooping)
+            DatabaseManager.shared.addPlayQueueItem(item)
+        }
+        notifyUpdate()
+        
+        checkAndStartPlayback()
+    }
+    
+    func getPlayQueue() -> [PlayQueueItem] {
+        return DatabaseManager.shared.getPlayQueue()
+    }
+    
+    func clearPlayQueue() {
+        DatabaseManager.shared.clearPlayQueue()
+        notifyUpdate()
+    }
+    
+    func updateQueueItemStatus(id: UUID, status: PlayQueueStatus) {
+        DatabaseManager.shared.updatePlayQueueStatus(id: id, status: status)
+        notifyUpdate()
+    }
+    
+    func updateQueueItemSortOrder(id: UUID, newSortOrder: Int) throws {
+        DebugLogger.shared.info("Queue: Attempting to move item \(id) to position \(newSortOrder)")
+        let queue = getPlayQueue()
+        
+        guard let itemToMove = queue.first(where: { $0.id == id }) else {
+            throw NSError(domain: "MediaManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Queue item not found"])
+        }
+        
+        // Constraint 1: Cannot move played or playing items
+        if itemToMove.status == .played || itemToMove.status == .playing {
+            DebugLogger.shared.warning("Queue: Move failed - Item is \(itemToMove.status)")
+            throw NSError(domain: "MediaManager", code: 403, userInfo: [NSLocalizedDescriptionKey: "Cannot reorder played or playing items"])
+        }
+        
+        // Constraint 2: Cannot move before currently playing item
+        if let playingItem = queue.first(where: { $0.status == .playing }) {
+            if newSortOrder <= playingItem.sortOrder {
+                DebugLogger.shared.warning("Queue: Move failed - Target position \(newSortOrder) is before playing item \(playingItem.sortOrder)")
+                throw NSError(domain: "MediaManager", code: 403, userInfo: [NSLocalizedDescriptionKey: "Cannot move item before currently playing item"])
+            }
+        }
+        
+        // Constraint 3: Cannot move before last played item (if no playing item, but history exists)
+        // Actually, just checking against the max sort order of played items is safer
+        if let maxPlayedSort = queue.filter({ $0.status == .played }).map({ $0.sortOrder }).max() {
+            if newSortOrder <= maxPlayedSort {
+                DebugLogger.shared.warning("Queue: Move failed - Target position \(newSortOrder) is before played history \(maxPlayedSort)")
+                throw NSError(domain: "MediaManager", code: 403, userInfo: [NSLocalizedDescriptionKey: "Cannot move item before played items"])
+            }
+        }
+        
+        DebugLogger.shared.info("Queue: Moving item \(id) to \(newSortOrder)")
+        DatabaseManager.shared.updatePlayQueueSortOrder(id: id, sortOrder: newSortOrder)
+        notifyUpdate()
+    }
+    
+    func checkAndStartPlayback() {
+        // If player is already playing, do nothing
+        if isPlayerPlaying { 
+            DebugLogger.shared.info("Queue: Player is busy, skipping auto-start")
+            return 
+        }
+        
+        let queue = getPlayQueue()
+        
+        // Find first pending item
+        if let nextItem = queue.first(where: { $0.status == .pending }) {
+            if let video = nextItem.video {
+                DebugLogger.shared.info("Queue: Auto-starting playback from queue: \(video.title)")
+                NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+            }
+        } else {
+            DebugLogger.shared.info("Queue: No pending items to auto-start")
+        }
     }
 }
 

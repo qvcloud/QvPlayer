@@ -15,6 +15,12 @@ struct ContentView: View {
             DebugOverlayView()
                 .zIndex(999)
         }
+        .onAppear {
+            // Check for auto-play on app launch
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                MediaManager.shared.checkAndStartPlayback()
+            }
+        }
     }
 }
 

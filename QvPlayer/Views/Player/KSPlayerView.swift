@@ -60,6 +60,7 @@ struct KSPlayerView: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.parent = self
         #if canImport(KSPlayer)
         if let playerLayer = context.coordinator.playerLayer {
             var targetURL = video.cachedURL ?? video.url
@@ -114,6 +115,7 @@ struct KSPlayerView: UIViewRepresentable {
     }
     
     class Coordinator: NSObject {
+        var parent: KSPlayerView?
         #if canImport(KSPlayer)
         var playerLayer: KSPlayerLayer? {
             didSet {
@@ -193,6 +195,7 @@ struct KSPlayerView: UIViewRepresentable {
             let status: [String: Any] = [
                 "isPlaying": player.isPlaying,
                 "title": playerLayer.url.lastPathComponent,
+                "id": parent?.video.id.uuidString ?? "",
                 "currentTime": currentTime.isNaN ? 0 : currentTime,
                 "duration": duration.isNaN ? 0 : duration,
                 "serverAddress": serverAddress,

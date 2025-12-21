@@ -3,7 +3,7 @@ import AVKit
 
 struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
-    let video: Video
+    @State var video: Video
     @AppStorage("playerEngine") private var playerEngine = "system"
     @StateObject private var viewModel = PlayerViewModel()
     @State private var ksIsPlaying = false
@@ -88,8 +88,23 @@ struct PlayerView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .playerDidFinishPlaying)) { _ in
-            print("🏁 [PlayerView] Received finish notification, dismissing...")
-            dismiss()
+            print("🏁 [PlayerView] Received finish notification")
+            // Do NOT dismiss here if we are in a queue context
+            // The MediaManager will trigger the next video
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .commandPlayVideo)) { notification in
+            if let nextVideo = notification.userInfo?["video"] as? Video {
+                print("⏭ [PlayerView] Switching to next video: \(nextVideo.title)")
+                self.video = nextVideo
+                
+                if playerEngine == "ksplayer" {
+                    // KSPlayerView will update because 'video' is now a @State property passed to it
+                    // But we might need to ensure it re-renders or re-initializes the player
+                } else {
+                    viewModel.load(video: nextVideo)
+                    viewModel.play()
+                }
+            }
         }
         .onExitCommand {
             dismiss()
@@ -184,10 +199,15 @@ struct PlayerView: View {
             }
         }
         .onAppear {
-            viewModel.load(video: video)
+            if playerEngine != "ksplayer" {
+                viewModel.load(video: video)
+                viewModel.play()
+            }
         }
         .onDisappear {
-            viewModel.stop()
+            if playerEngine != "ksplayer" {
+                viewModel.stop()
+            }
         }
     }
     

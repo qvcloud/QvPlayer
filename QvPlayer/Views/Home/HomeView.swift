@@ -42,12 +42,19 @@ struct HomeView: View {
                 PlayerView(video: video)
             }
             .onReceive(NotificationCenter.default.publisher(for: .commandPlayVideo)) { notification in
-                if let index = notification.userInfo?["index"] as? Int {
-                    let videos = MediaManager.shared.getVideos()
-                    if index >= 0 && index < videos.count {
-                        let video = videos[index]
+                // Only handle navigation if we are NOT already in the player
+                // If we are in the player, PlayerView handles the switch
+                if navigationPath.isEmpty {
+                    if let video = notification.userInfo?["video"] as? Video {
                         navigationPath = NavigationPath()
                         navigationPath.append(video)
+                    } else if let index = notification.userInfo?["index"] as? Int {
+                        let videos = MediaManager.shared.getVideos()
+                        if index >= 0 && index < videos.count {
+                            let video = videos[index]
+                            navigationPath = NavigationPath()
+                            navigationPath.append(video)
+                        }
                     }
                 }
             }

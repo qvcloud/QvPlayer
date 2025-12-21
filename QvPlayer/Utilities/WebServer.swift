@@ -277,6 +277,12 @@ class WebServer {
             (success, message) = WebAPIController.shared.handleDeleteGroup(body: bodyString)
         } else if method == "POST" && path.hasPrefix("/api/v1/control/") {
             (success, message) = WebAPIController.shared.handleControl(path: path, queryItems: queryItems)
+        } else if method == "POST" && path == "/api/v1/queue" {
+            (success, message) = WebAPIController.shared.handleAddToQueue(body: bodyString)
+        } else if method == "PUT" && path == "/api/v1/queue/sort" {
+            (success, message) = WebAPIController.shared.handleUpdateQueueSortOrder(body: bodyString)
+        } else if method == "DELETE" && path == "/api/v1/queue" {
+            (success, message) = WebAPIController.shared.handleClearQueue(queryItems: queryItems)
         }
         // Uploads (Keep local for now due to complexity)
         else if method == "POST" && path == "/api/v1/upload" {
