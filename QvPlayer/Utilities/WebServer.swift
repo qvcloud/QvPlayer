@@ -489,33 +489,16 @@ class WebServer {
         
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let content = String(data: data, encoding: .utf8) else {
-                    throw NSError(domain: "WebServer", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid content encoding"])
-                }
-                
                 let groupName = name ?? url.lastPathComponent
                 
-                // Dispatch to main queue to ensure thread safety with MediaManager if needed, 
-                // though MediaManager isn't strictly main-actor bound, it's good practice for shared state.
-                // However, since we are in a Task, we can just call it. 
-                // But we need to be careful about sendResponse which uses the socket.
+                try await MediaManager.shared.importM3UFromURL(url: urlString, customGroupName: groupName)
                 
-                DispatchQueue.main.async {
-                    do {
-                        try MediaManager.shared.appendMediaFromM3U(content: content, customGroupName: groupName)
-                        self.queue.async {
-                            self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
-                        }
-                    } catch {
-                        self.queue.async {
-                            self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import remote playlist: \(error.localizedDescription)\"}")
-                        }
-                    }
+                self.queue.async {
+                    self.sendResponse(client: client, contentType: "application/json", body: "{\"success\": true, \"message\": \"Remote playlist imported successfully\"}")
                 }
             } catch {
                 self.queue.async {
-                    self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to download remote playlist: \(error.localizedDescription)\"}")
+                    self.sendResponse(client: client, status: "500 Internal Server Error", contentType: "application/json", body: "{\"error\": \"Failed to import remote playlist: \(error.localizedDescription)\"}")
                 }
             }
         }

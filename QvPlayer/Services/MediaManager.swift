@@ -207,6 +207,24 @@ class MediaManager: ObservableObject {
         DatabaseManager.shared.addVideos(videosToAdd)
         notifyUpdate()
     }
+
+    func importM3UFromURL(url: String, customGroupName: String? = nil) async throws {
+        DebugLogger.shared.info("Importing M3U from URL: \(url)")
+        guard let validURL = URL(string: url) else {
+            throw NSError(domain: "MediaManager", code: 400, userInfo: [NSLocalizedDescriptionKey: "Invalid M3U URL"])
+        }
+
+        let (data, response) = try await URLSession.shared.data(from: validURL)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw NSError(domain: "MediaManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch M3U: HTTP error"])
+        }
+
+        guard let content = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "MediaManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to decode M3U content"])
+        }
+
+        try appendMediaFromM3U(content: content, customGroupName: customGroupName)
+    }
     
     func replaceMediaWithM3U(content: String) throws {
         DebugLogger.shared.warning("Replacing entire playlist")

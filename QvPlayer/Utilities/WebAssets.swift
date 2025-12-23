@@ -494,6 +494,17 @@ struct WebAssets {
                     </div>
 
                     <div class="card">
+                        <h2>Add M3U Playlist URL</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to an M3U playlist to import multiple channels.</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <input type="text" id="m3uUrl" placeholder="http://example.com/playlist.m3u" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="m3uGroupName" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                        </div>
+                        <button onclick="addM3U()" class="btn" id="addM3UBtn">Import M3U Playlist</button>
+                        <div id="m3uStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
+                    </div>
+
+                    <div class="card">
                         <h2>Add Remote File</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote video file (MP4, MKV, etc).</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
@@ -767,6 +778,52 @@ struct WebAssets {
                             statusDiv.textContent = 'Success!';
                             urlInput.value = '';
                             nameInput.value = '';
+                            groupInput.value = '';
+                            switchTab('media');
+                            loadMedia();
+                        } else {
+                            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
+                        }
+                    })
+                    .catch(err => {
+                        btn.disabled = false;
+                        statusDiv.textContent = 'Error: ' + err;
+                    });
+                }
+
+                function addM3U() {
+                    const urlInput = document.getElementById('m3uUrl');
+                    const groupInput = document.getElementById('m3uGroupName');
+                    const url = urlInput.value.trim();
+                    const group = groupInput.value.trim();
+                    
+                    if (!url) {
+                        alert('Please enter M3U URL');
+                        return;
+                    }
+                    
+                    const statusDiv = document.getElementById('m3uStatus');
+                    const btn = document.getElementById('addM3UBtn');
+                    
+                    statusDiv.textContent = 'Importing M3U playlist...';
+                    btn.disabled = true;
+                    
+                    fetch('/api/v1/upload/remote', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            name: group
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        btn.disabled = false;
+                        if (data.success) {
+                            statusDiv.textContent = 'Success!';
+                            urlInput.value = '';
                             groupInput.value = '';
                             switchTab('media');
                             loadMedia();
