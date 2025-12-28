@@ -4,7 +4,7 @@ import AVKit
 struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @State var video: Video
-    @AppStorage("playerEngine") private var playerEngine = "system"
+    @AppStorage("playerEngine") private var playerEngine = AppConstants.defaultPlayerEngine
     @StateObject private var viewModel = PlayerViewModel()
     @State private var ksIsPlaying = false
     
@@ -34,9 +34,7 @@ struct PlayerView: View {
             channelInfoOverlay
         }
         .ignoresSafeArea()
-        #if os(iOS)
-        .navigationBarHidden(true)
-        #endif
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             print("▶️ [PlayerView] Current Engine: \(playerEngine)")
             // Sync viewModel with current video for UI state (even if using KSPlayer)

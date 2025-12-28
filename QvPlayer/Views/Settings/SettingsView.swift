@@ -8,8 +8,9 @@ struct SettingsView: View {
     @AppStorage("proxyPassword") private var proxyPassword = ""
     
     @AppStorage("webServerEnabled") private var webServerEnabled = true
+    @AppStorage("webServerPort") private var webServerPort = AppConstants.defaultWebServerPort
     
-    @AppStorage("playerEngine") private var playerEngine = "system"
+    @AppStorage("playerEngine") private var playerEngine = AppConstants.defaultPlayerEngine
     
     @AppStorage("selectedLanguage") private var selectedLanguage = "system"
     @AppStorage("showDebugOverlay") private var showDebugOverlay = false
@@ -32,7 +33,10 @@ struct SettingsView: View {
                     HStack {
                         Text("User Agent")
                         Spacer()
-                        Text(DatabaseManager.shared.getConfig(key: "user_agent")?.isEmpty == false ? "Custom" : "Default")
+                        Text({
+                            let ua = DatabaseManager.shared.getConfig(key: "user_agent") ?? ""
+                            return ua.isEmpty || ua == AppConstants.defaultUserAgent ? "Default" : "Custom"
+                        }())
                             .foregroundColor(.secondary)
                     }
                 }
@@ -95,6 +99,18 @@ struct SettingsView: View {
                             WebServer.shared.stop()
                         }
                     }
+                
+                if webServerEnabled {
+                    HStack {
+                        Text("Port")
+                        Spacer()
+                        TextField("\(AppConstants.defaultWebServerPort)", value: $webServerPort, format: .number.grouping(.never))
+                            .onChange(of: webServerPort) { _, _ in
+                                WebServer.shared.stop()
+                                WebServer.shared.start()
+                            }
+                    }
+                }
                 
                 if webServerEnabled, let url = WebServer.shared.serverURL {
                     HStack {

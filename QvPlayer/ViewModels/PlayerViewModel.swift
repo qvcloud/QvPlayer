@@ -183,7 +183,7 @@ class PlayerViewModel: ObservableObject {
         self.currentVideo = video
         
         // Check Player Engine
-        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? "system"
+        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? AppConstants.defaultPlayerEngine
         if engine == "ksplayer" {
             // If using KSPlayer, we don't need to setup AVPlayer here.
             // Just stop any existing system player to avoid double audio.
@@ -193,15 +193,12 @@ class PlayerViewModel: ObservableObject {
         }
         
         // Configure User-Agent if set
-        let userAgent = DatabaseManager.shared.getConfig(key: "user_agent")
-        var asset: AVURLAsset
-        if let ua = userAgent, !ua.isEmpty {
-            let options = ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]]
-            asset = AVURLAsset(url: playURL, options: options)
-            DebugLogger.shared.info("Using custom User-Agent: \(ua)")
-        } else {
-            asset = AVURLAsset(url: playURL)
-        }
+        let configUserAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        let userAgent = (configUserAgent?.isEmpty ?? true) ? AppConstants.defaultUserAgent : configUserAgent!
+        
+        let options = ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": userAgent]]
+        let asset = AVURLAsset(url: playURL, options: options)
+        DebugLogger.shared.info("Using User-Agent: \(userAgent)")
         
         let playerItem = AVPlayerItem(asset: asset)
         
@@ -392,7 +389,7 @@ class PlayerViewModel: ObservableObject {
     }
     
     func play() {
-        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? "system"
+        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? AppConstants.defaultPlayerEngine
         if engine == "ksplayer" { return }
         
         player?.rate = playbackRate

@@ -3,7 +3,11 @@ import Darwin
 
 class WebServer {
     static let shared = WebServer()
-    private let port: UInt16 = 10001
+    
+    private var port: UInt16 {
+        let p = UserDefaults.standard.integer(forKey: "webServerPort")
+        return p > 0 ? UInt16(p) : UInt16(AppConstants.defaultWebServerPort)
+    }
     
     private class Client {
         let id = UUID()

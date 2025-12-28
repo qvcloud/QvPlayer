@@ -2,7 +2,7 @@ import SwiftUI
 
 struct DebugOverlayView: View {
     @StateObject private var logger = DebugLogger.shared
-    @AppStorage("playerEngine") private var playerEngine = "system"
+    @AppStorage("playerEngine") private var playerEngine = AppConstants.defaultPlayerEngine
     @AppStorage("showDebugOverlay") private var showDebugOverlay = false
     
     var body: some View {

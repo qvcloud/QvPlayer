@@ -177,9 +177,9 @@ class HomeViewModel: ObservableObject {
         request.timeoutInterval = 30 // Increased timeout for live streams
         
         // Add User-Agent if configured
-        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
-            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        }
+        let configUserAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        let userAgent = (configUserAgent?.isEmpty ?? true) ? AppConstants.defaultUserAgent : configUserAgent!
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         
         do {
             let (_, _) = try await NetworkManager.shared.session.data(for: request)

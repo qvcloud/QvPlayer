@@ -93,9 +93,9 @@ struct VideoThumbnailView: View {
         
         // 1. Try AVAssetImageGenerator first (Fastest, Native)
         var assetOptions: [String: Any] = [:]
-        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
-            assetOptions["AVURLAssetHTTPHeaderFieldsKey"] = ["User-Agent": userAgent]
-        }
+        let configUserAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        let userAgent = (configUserAgent?.isEmpty ?? true) ? AppConstants.defaultUserAgent : configUserAgent!
+        assetOptions["AVURLAssetHTTPHeaderFieldsKey"] = ["User-Agent": userAgent]
         
         let asset = AVURLAsset(url: targetURL, options: assetOptions)
         
@@ -165,9 +165,9 @@ struct VideoThumbnailView: View {
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         
-        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
-            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-        }
+        let configUserAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        let userAgent = (configUserAgent?.isEmpty ?? true) ? AppConstants.defaultUserAgent : configUserAgent!
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         
         do {
             let (data, response) = try await NetworkManager.shared.session.data(for: request)

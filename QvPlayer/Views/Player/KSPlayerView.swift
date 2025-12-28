@@ -120,10 +120,11 @@ struct KSPlayerView: UIViewRepresentable {
         }
         
         // User-Agent
-        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
-            options.userAgent = userAgent
-            DebugLogger.shared.info("[KSPlayer] Using custom User-Agent: \(userAgent)")
-        }
+        let configUserAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        let userAgent = (configUserAgent?.isEmpty ?? true) ? AppConstants.defaultUserAgent : configUserAgent!
+        
+        options.userAgent = userAgent
+        DebugLogger.shared.info("[KSPlayer] Using User-Agent: \(userAgent)")
         
         // Proxy
         if UserDefaults.standard.bool(forKey: "proxyEnabled") {

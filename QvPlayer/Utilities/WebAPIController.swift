@@ -91,6 +91,9 @@ class WebAPIController {
         let proxyUsername = UserDefaults.standard.string(forKey: "proxyUsername") ?? ""
         let proxyPassword = UserDefaults.standard.string(forKey: "proxyPassword") ?? ""
         
+        let webServerPort = UserDefaults.standard.integer(forKey: "webServerPort")
+        let port = webServerPort > 0 ? webServerPort : AppConstants.defaultWebServerPort
+        
         let allUserAgents = DatabaseManager.shared.getAllUserAgents()
         let userAgentsDict = allUserAgents.map { [
             "name": $0.name,
@@ -109,7 +112,8 @@ class WebAPIController {
             "proxyHost": proxyHost,
             "proxyPort": proxyPort,
             "proxyUsername": proxyUsername,
-            "proxyPassword": proxyPassword
+            "proxyPassword": proxyPassword,
+            "webServerPort": port
         ]
         
         if let data = try? JSONSerialization.data(withJSONObject: config) {
