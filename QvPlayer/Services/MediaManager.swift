@@ -551,22 +551,26 @@ class MediaManager: ObservableObject {
     }
     
     func checkAndStartPlayback() {
-        // If player is already playing, do nothing
-        if isPlayerPlaying { 
-            DebugLogger.shared.info("Queue: Player is busy, skipping auto-start")
-            return 
-        }
-        
-        let queue = getPlayQueue()
-        
-        // Find first pending item
-        if let nextItem = queue.first(where: { $0.status == .pending }) {
-            if let video = nextItem.video {
-                DebugLogger.shared.info("Queue: Auto-starting playback from queue: \(video.title)")
-                NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // If player is already playing, do nothing
+            if self.isPlayerPlaying {
+                DebugLogger.shared.info("Queue: Player is busy, skipping auto-start")
+                return
             }
-        } else {
-            DebugLogger.shared.info("Queue: No pending items to auto-start")
+            
+            let queue = self.getPlayQueue()
+            
+            // Find first pending item
+            if let nextItem = queue.first(where: { $0.status == .pending }) {
+                if let video = nextItem.video {
+                    DebugLogger.shared.info("Queue: Auto-starting playback from queue: \(video.title)")
+                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+                }
+            } else {
+                DebugLogger.shared.info("Queue: No pending items to auto-start")
+            }
         }
     }
 }
