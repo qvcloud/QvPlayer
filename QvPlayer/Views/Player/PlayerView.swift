@@ -604,8 +604,8 @@ struct PlayerView: View {
                 showChannelInfo = true
             }
             
-            // Auto-hide after 5 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            // Auto-hide after 10 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
                 withAnimation {
                     self.showChannelInfo = false
                 }
