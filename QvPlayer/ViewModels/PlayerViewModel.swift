@@ -15,6 +15,10 @@ class PlayerViewModel: ObservableObject {
     @Published var currentVideo: Video?
     @Published var errorMessage: String?
     
+    // Audio Tracks
+    @Published var audioTracks: [String] = []
+    @Published var currentAudioTrack: String?
+    
     // Source Switching Overlay
     @Published var sourceList: [Video] = []
     @Published var showSourceList: Bool = false
@@ -95,6 +99,23 @@ class PlayerViewModel: ObservableObject {
                 guard let self = self, self.player != nil else { return }
                 if let seconds = notification.userInfo?["seconds"] as? Double {
                     self.seek(by: seconds)
+                }
+            }
+        })
+        
+        observers.append(center.addObserver(forName: .playerTracksDidUpdate, object: nil, queue: .main) { [weak self] notification in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if let tracks = notification.userInfo?["audioTracks"] as? [String] {
+                    // Only update if changed to avoid loops or unnecessary updates
+                    if self.audioTracks != tracks {
+                        self.audioTracks = tracks
+                    }
+                }
+                if let current = notification.userInfo?["currentAudioTrack"] as? String {
+                    if self.currentAudioTrack != current {
+                        self.currentAudioTrack = current
+                    }
                 }
             }
         })
@@ -379,6 +400,11 @@ class PlayerViewModel: ObservableObject {
         } else {
             play()
         }
+    }
+    
+    func selectAudioTrack(_ trackId: String) {
+        print("🔊 [PlayerViewModel] Selecting audio track: \(trackId)")
+        NotificationCenter.default.post(name: .commandSelectAudioTrack, object: nil, userInfo: ["trackId": trackId])
     }
     
     func seek(by seconds: Double) {

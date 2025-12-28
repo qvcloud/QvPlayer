@@ -402,6 +402,29 @@ struct PlayerView: View {
                 .buttonStyle(.card)
                 .focused($focusedField, equals: .fastForward)
             }
+            
+            // Audio Track Selection
+            if !viewModel.audioTracks.isEmpty {
+                Menu {
+                    ForEach(viewModel.audioTracks, id: \.self) { track in
+                        Button(action: {
+                            viewModel.selectAudioTrack(track)
+                        }) {
+                            HStack {
+                                Text(track)
+                                if track == viewModel.currentAudioTrack {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 30))
+                        .padding()
+                }
+                .buttonStyle(.card)
+            }
         }
         .padding(.bottom, 60)
         .opacity(showControls || (focusedField != nil && focusedField != .ksPlayer) ? 1 : 0)

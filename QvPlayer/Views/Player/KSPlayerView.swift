@@ -205,6 +205,7 @@ struct KSPlayerView: UIViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handleToggle), name: .commandToggle, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeek(_:)), name: .commandSeek, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeekTo(_:)), name: .commandSeekTo, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleSelectAudioTrack(_:)), name: .commandSelectAudioTrack, object: nil)
         }
         
         @objc private func handlePlay() { 
@@ -253,6 +254,19 @@ struct KSPlayerView: UIViewRepresentable {
             }
         }
         
+        @objc private func handleSelectAudioTrack(_ notification: Notification) {
+            guard let trackId = notification.userInfo?["trackId"] as? String else { return }
+            if let playerLayer = playerLayer {
+                let tracks = playerLayer.player.tracks(mediaType: .audio)
+                if let track = tracks.first(where: { ($0.name.isEmpty ? $0.description : $0.name) == trackId }) {
+                    track.isEnabled = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        self.broadcastStatus()
+                    }
+                }
+            }
+        }
+        
         private func startStatusTimer() {
             statusTimer?.invalidate()
             statusTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -280,6 +294,19 @@ struct KSPlayerView: UIViewRepresentable {
                 "isOnline": player.isPlaying || player.duration > 0
             ]
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
+            
+            // Broadcast Audio Tracks
+            let audioTracks = player.tracks(mediaType: .audio)
+            if !audioTracks.isEmpty {
+                let audioTrackNames = audioTracks.map { $0.name.isEmpty ? $0.description : $0.name }
+                let currentAudioTrack = audioTracks.first(where: { $0.isEnabled })
+                let currentAudioTrackName = currentAudioTrack.map { $0.name.isEmpty ? $0.description : $0.name } ?? ""
+                
+                NotificationCenter.default.post(name: .playerTracksDidUpdate, object: nil, userInfo: [
+                    "audioTracks": audioTrackNames,
+                    "currentAudioTrack": currentAudioTrackName
+                ])
+            }
             
             // Check for completion (Simple polling detection)
             // Only trigger if we are very close to the end, stopped, AND not paused by user
