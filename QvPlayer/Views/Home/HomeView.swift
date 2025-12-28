@@ -171,7 +171,9 @@ struct VideoListView: View {
     }
     
     private func videoItem(for video: Video) -> some View {
-        NavigationLink(value: video) {
+        Button {
+            playVideo(video)
+        } label: {
             VideoCard(video: video)
         }
         .buttonStyle(.card)
@@ -209,6 +211,26 @@ struct VideoListView: View {
                     Label("Check Speed", systemImage: "speedometer")
                 }
             }
+        }
+    }
+    
+    private func playVideo(_ video: Video) {
+        Task {
+            // Find the group and setup queue
+            for group in groups {
+                if let index = group.videos.firstIndex(where: { $0.id == video.id }) {
+                    // Create queue starting from this video
+                    let videosToQueue = Array(group.videos[index...])
+                    // Run on background to avoid blocking UI
+                    await Task.detached {
+                        MediaManager.shared.replaceQueue(videos: videosToQueue)
+                    }.value
+                    return
+                }
+            }
+            
+            // Fallback if not found in groups
+            MediaManager.shared.replaceQueue(videos: [video])
         }
     }
 }

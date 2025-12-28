@@ -126,6 +126,9 @@ struct KSPlayerView: UIViewRepresentable {
         private var lastBytesRead: Int64 = 0
         private var lastPlayableTime: TimeInterval = 0
         private var lastSpeedCheckTime: TimeInterval = 0
+        private var hasFinishedPlaying: Bool = false
+        
+        private var isUserPaused: Bool = false
         
         override init() {
             super.init()
@@ -150,12 +153,14 @@ struct KSPlayerView: UIViewRepresentable {
         }
         
         @objc private func handlePlay() { 
+            isUserPaused = false
             playerLayer?.play()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.broadcastStatus()
             }
         }
         @objc private func handlePause() { 
+            isUserPaused = true
             playerLayer?.pause()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 self.broadcastStatus()
@@ -163,8 +168,10 @@ struct KSPlayerView: UIViewRepresentable {
         }
         @objc private func handleToggle() {
             if playerLayer?.player.isPlaying == true {
+                isUserPaused = true
                 playerLayer?.pause()
             } else {
+                isUserPaused = false
                 playerLayer?.play()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -173,6 +180,8 @@ struct KSPlayerView: UIViewRepresentable {
         }
         @objc private func handleSeek(_ notification: Notification) {
             if let seconds = notification.userInfo?["seconds"] as? Double {
+                // Seek usually auto-plays, so reset pause flag
+                isUserPaused = false
                 let current = playerLayer?.player.currentPlaybackTime ?? 0
                 playerLayer?.seek(time: current + seconds, autoPlay: true, completion: { _ in 
                     self.broadcastStatus()
@@ -209,11 +218,20 @@ struct KSPlayerView: UIViewRepresentable {
             NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
             
             // Check for completion (Simple polling detection)
-            if duration > 0 && (duration - currentTime) < 0.5 && !player.isPlaying {
+            // Only trigger if we are very close to the end, stopped, AND not paused by user
+            if duration > 0 && (duration - currentTime) < 0.5 && !player.isPlaying && !isUserPaused {
                  // Only trigger if we are very close to the end and stopped
                  // This assumes the player stops automatically at the end
-                 print("🏁 [KSPlayer] Playback finished (detected via polling)")
-                 NotificationCenter.default.post(name: .playerDidFinishPlaying, object: nil)
+                 if !hasFinishedPlaying {
+                     print("🏁 [KSPlayer] Playback finished (detected via polling)")
+                     NotificationCenter.default.post(name: .playerDidFinishPlaying, object: nil)
+                     hasFinishedPlaying = true
+                 }
+            } else {
+                // Reset flag if we are not at the end (e.g. seeked back)
+                if (duration - currentTime) > 1.0 {
+                    hasFinishedPlaying = false
+                }
             }
             
             // Update Debug Stats
