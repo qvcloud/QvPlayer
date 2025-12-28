@@ -163,8 +163,10 @@ struct VideoListView: View {
                 .foregroundStyle(.primary)
                 .padding(.vertical, 12)
                 .padding(.leading, 20)
+            
             Spacer()
         }
+        .frame(maxWidth: .infinity) // Ensure header takes full width
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.bottom, 20)
@@ -215,6 +217,20 @@ struct VideoListView: View {
     }
     
     private func playVideo(_ video: Video) {
+        // Special handling for Live Streams (Direct Play, No Queue)
+        if video.isLive {
+            Task {
+                // Clear queue to ensure no background playlist interference
+                MediaManager.shared.clearPlayQueue()
+                
+                // Trigger navigation directly
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .commandPlayVideo, object: nil, userInfo: ["video": video])
+                }
+            }
+            return
+        }
+
         Task {
             // Find the group and setup queue
             for group in groups {
@@ -270,10 +286,23 @@ struct VideoCard: View {
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(video.title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(video.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                    if video.isLive, let count = video.sourceCount, count > 1 {
+                        Text("\(count)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.gray.opacity(0.7))
+                            .clipShape(Capsule())
+                    }
+                }
                 
                 if let description = video.description {
                     Text(description)

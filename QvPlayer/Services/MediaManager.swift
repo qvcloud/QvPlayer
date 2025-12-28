@@ -452,6 +452,12 @@ class MediaManager: ObservableObject {
     // MARK: - Play Queue
     
     func addToPlayQueue(video: Video, isLooping: Bool? = nil) {
+        // Skip live streams for playlist
+        if video.isLive {
+            DebugLogger.shared.info("Queue: Skipping live stream \(video.title) (Live streams not allowed in playlist)")
+            return
+        }
+        
         DebugLogger.shared.info("Queue: Adding video \(video.title) to queue")
         
         if let loop = isLooping {
@@ -478,7 +484,14 @@ class MediaManager: ObservableObject {
         
         clearPlayQueue()
         
-        for (index, video) in videos.enumerated() {
+        // Filter out live streams
+        let validVideos = videos.filter { !$0.isLive }
+        
+        if validVideos.count < videos.count {
+            DebugLogger.shared.info("Queue: Filtered out \(videos.count - validVideos.count) live streams")
+        }
+        
+        for (index, video) in validVideos.enumerated() {
             let item = PlayQueueItem(videoId: video.id, sortOrder: index, status: .pending)
             DatabaseManager.shared.addPlayQueueItem(item)
         }

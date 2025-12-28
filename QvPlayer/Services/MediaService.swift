@@ -24,6 +24,7 @@ class MediaService {
         
         var currentTitle: String?
         var currentGroup: String?
+        var currentTvgName: String?
         var currentLatency: Double?
         var currentLastCheck: Date?
         var currentSortOrder: Int = 0
@@ -33,7 +34,7 @@ class MediaService {
             if trimmedLine.isEmpty { continue }
             
             if trimmedLine.hasPrefix("#EXTINF:") {
-                // Example: #EXTINF:-1 group-title="News",Channel Name
+                // Example: #EXTINF:-1 group-title="News" tvg-name="CCTV1",Channel Name
                 // Parse group-title
                 if let groupRange = trimmedLine.range(of: "group-title=\"([^\"]+)\"", options: .regularExpression) {
                     let groupMatch = String(trimmedLine[groupRange])
@@ -46,6 +47,19 @@ class MediaService {
                     }
                 } else {
                     currentGroup = nil
+                }
+                
+                // Parse tvg-name
+                if let tvgRange = trimmedLine.range(of: "tvg-name=\"([^\"]+)\"", options: .regularExpression) {
+                    let tvgMatch = String(trimmedLine[tvgRange])
+                    if let startQuote = tvgMatch.firstIndex(of: "\""),
+                       let endQuote = tvgMatch.lastIndex(of: "\""),
+                       startQuote != endQuote {
+                        let tvgName = String(tvgMatch[tvgMatch.index(after: startQuote)..<endQuote])
+                        currentTvgName = tvgName
+                    }
+                } else {
+                    currentTvgName = nil
                 }
                 
                 // Parse Title (everything after the last comma)
@@ -73,10 +87,11 @@ class MediaService {
                         cachedURL = url
                     }
                     
-                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: isLive, cachedURL: cachedURL, latency: currentLatency, lastLatencyCheck: currentLastCheck, sortOrder: currentSortOrder))
+                    videos.append(Video(title: title, url: url, group: currentGroup, isLive: isLive, cachedURL: cachedURL, latency: currentLatency, lastLatencyCheck: currentLastCheck, sortOrder: currentSortOrder, tvgName: currentTvgName))
                     
                     currentTitle = nil
                     currentGroup = nil
+                    currentTvgName = nil
                     currentLatency = nil
                     currentLastCheck = nil
                     currentSortOrder = 0

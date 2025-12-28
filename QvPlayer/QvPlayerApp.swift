@@ -33,6 +33,9 @@ struct QvPlayerApp: App {
             DebugLogger.shared.info("Auto-starting Web Server...")
             WebServer.shared.start()
         }
+        
+        // Start Background Speed Test
+        SpeedTestManager.shared.start()
     }
     
     var body: some Scene {

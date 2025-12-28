@@ -15,6 +15,13 @@ class PlayerViewModel: ObservableObject {
     @Published var currentVideo: Video?
     @Published var errorMessage: String?
     
+    // Source Switching Overlay
+    @Published var sourceList: [Video] = []
+    @Published var showSourceList: Bool = false
+    @Published var highlightedVideo: Video?
+    private var sourceListTimer: Timer?
+    private var switchSourceDebounceTimer: Timer?
+    
     private var cancellables = Set<AnyCancellable>()
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var rateObserver: NSKeyValueObservation?
@@ -134,7 +141,29 @@ class PlayerViewModel: ObservableObject {
         }
         
         self.currentVideo = video
-        let playerItem = AVPlayerItem(url: playURL)
+        
+        // Check Player Engine
+        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? "system"
+        if engine == "ksplayer" {
+            // If using KSPlayer, we don't need to setup AVPlayer here.
+            // Just stop any existing system player to avoid double audio.
+            self.player?.pause()
+            self.player = nil
+            return
+        }
+        
+        // Configure User-Agent if set
+        let userAgent = DatabaseManager.shared.getConfig(key: "user_agent")
+        var asset: AVURLAsset
+        if let ua = userAgent, !ua.isEmpty {
+            let options = ["AVURLAssetHTTPHeaderFieldsKey": ["User-Agent": ua]]
+            asset = AVURLAsset(url: playURL, options: options)
+            DebugLogger.shared.info("Using custom User-Agent: \(ua)")
+        } else {
+            asset = AVURLAsset(url: playURL)
+        }
+        
+        let playerItem = AVPlayerItem(asset: asset)
         
         // Set external metadata for tvOS Info Panel
         var metadata: [AVMetadataItem] = []
@@ -263,7 +292,11 @@ class PlayerViewModel: ObservableObject {
         // Observe buffering status
         timeControlStatusObserver = player?.observe(\.timeControlStatus) { [weak self] player, _ in
             Task { @MainActor in
-                self?.isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                let isBuffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                self?.isBuffering = isBuffering
+                
+                // Notify SpeedTestManager
+                NotificationCenter.default.post(name: Notification.Name("playerIsBuffering"), object: nil, userInfo: ["isBuffering": isBuffering])
                 
                 switch player.timeControlStatus {
                 case .waitingToPlayAtSpecifiedRate:
@@ -319,6 +352,9 @@ class PlayerViewModel: ObservableObject {
     }
     
     func play() {
+        let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? "system"
+        if engine == "ksplayer" { return }
+        
         player?.play()
         isPlaying = true
     }
@@ -378,5 +414,173 @@ class PlayerViewModel: ObservableObject {
             "isOnline": isPlaying // Simple approximation for System Player
         ]
         NotificationCenter.default.post(name: .playerStatusDidUpdate, object: nil, userInfo: ["status": status])
+    }
+    
+    func switchChannel(direction: Int) {
+        guard let currentVideo = self.currentVideo, let tvgName = currentVideo.tvgName else { return }
+        
+        Task.detached {
+            if let nextVideo = DatabaseManager.shared.getAdjacentChannel(currentTvgName: tvgName, offset: direction) {
+                await MainActor.run {
+                    DebugLogger.shared.info("Switching Channel to: \(nextVideo.tvgName ?? nextVideo.title)")
+                    self.load(video: nextVideo)
+                    self.play()
+                    
+                    // Also update source list for the new channel in background
+                    Task.detached {
+                        let videos = DatabaseManager.shared.getVideos(byTvgName: nextVideo.tvgName ?? "")
+                        let sortedVideos = videos.sorted { v1, v2 in
+                            // Sort: Positive Latency < Nil (Untested) < Negative (Failed)
+                            let l1 = v1.latency ?? Double.greatestFiniteMagnitude
+                            let l2 = v2.latency ?? Double.greatestFiniteMagnitude
+                            
+                            let s1 = (l1 > 0) ? l1 : Double.infinity
+                            let s2 = (l2 > 0) ? l2 : Double.infinity
+                            
+                            if s1 != s2 { return s1 < s2 }
+                            return v1.title < v2.title
+                        }
+                        await MainActor.run {
+                            self.sourceList = sortedVideos
+                            self.showSourceList = true
+                            self.highlightedVideo = nextVideo
+                            
+                            // Auto hide after 1.5s
+                            self.sourceListTimer?.invalidate()
+                            self.sourceListTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                                Task { @MainActor in
+                                    self?.showSourceList = false
+                                    self?.highlightedVideo = nil
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                DebugLogger.shared.warning("No adjacent channel found")
+            }
+        }
+    }
+
+    func switchSource(direction: Int, currentVideo: Video? = nil) {
+        guard let video = currentVideo ?? self.currentVideo else {
+            DebugLogger.shared.error("switchSource: No current video")
+            return
+        }
+        
+        // If source list is already populated and visible, use it directly for faster switching
+        if showSourceList && !sourceList.isEmpty {
+            // If just keeping list open (direction 0), ensure highlight is synced if missing
+            if direction == 0 {
+                if highlightedVideo == nil { highlightedVideo = video }
+                resetSourceListTimer()
+                return
+            }
+            
+            let baseId = highlightedVideo?.id ?? video.id
+            if let index = sourceList.firstIndex(where: { $0.id == baseId }) {
+                var newIndex = index + direction
+                if newIndex < 0 { newIndex = sourceList.count - 1 }
+                if newIndex >= sourceList.count { newIndex = 0 }
+                
+                let nextVideo = sourceList[newIndex]
+                self.highlightedVideo = nextVideo
+                DebugLogger.shared.info("Highlighting source: \(nextVideo.title) (\(newIndex + 1)/\(sourceList.count))")
+                
+                resetSourceListTimer()
+                
+                // Debounce Switch
+                switchSourceDebounceTimer?.invalidate()
+                switchSourceDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                    Task { @MainActor in
+                        if nextVideo.id != self?.currentVideo?.id {
+                            DebugLogger.shared.info("Switching source to \(nextVideo.title) (Latency: \(nextVideo.latency ?? -1))")
+                            self?.load(video: nextVideo)
+                            self?.play()
+                        }
+                    }
+                }
+            } else {
+                DebugLogger.shared.error("switchSource: Base video ID \(baseId) not found in sourceList of \(sourceList.count) items")
+                // Fallback: Select first item
+                if let first = sourceList.first {
+                    self.highlightedVideo = first
+                }
+            }
+            return
+        }
+        
+        guard let tvgName = video.tvgName else {
+            DebugLogger.shared.error("switchSource: No tvgName for video \(video.title)")
+            return
+        }
+        
+        Task.detached {
+            let videos = DatabaseManager.shared.getVideos(byTvgName: tvgName)
+            guard !videos.isEmpty else { return }
+            
+            // Sort videos by latency (lowest positive first)
+            let sortedVideos = videos.sorted { v1, v2 in
+                // Sort: Positive Latency < Nil (Untested) < Negative (Failed)
+                let l1 = v1.latency ?? Double.greatestFiniteMagnitude
+                let l2 = v2.latency ?? Double.greatestFiniteMagnitude
+                
+                let s1 = (l1 > 0) ? l1 : Double.infinity
+                let s2 = (l2 > 0) ? l2 : Double.infinity
+                
+                if s1 != s2 { return s1 < s2 }
+                return v1.title < v2.title
+            }
+            
+            if let index = sortedVideos.firstIndex(where: { $0.id == video.id }) {
+                var newIndex = index + direction
+                if newIndex < 0 { newIndex = sortedVideos.count - 1 }
+                if newIndex >= sortedVideos.count { newIndex = 0 }
+                
+                let nextVideo = sortedVideos[newIndex]
+                
+                await MainActor.run {
+                    // Update Source List UI
+                    self.sourceList = sortedVideos
+                    self.showSourceList = true
+                    self.highlightedVideo = nextVideo
+                    DebugLogger.shared.info("Initial source list loaded. Highlighting: \(nextVideo.title)")
+                    
+                    self.resetSourceListTimer()
+                    
+                    if nextVideo.id != video.id {
+                        // Debounce initial switch if it was a navigation action
+                        self.switchSourceDebounceTimer?.invalidate()
+                        self.switchSourceDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                            Task { @MainActor in
+                                DebugLogger.shared.info("Switching source for \(tvgName) to \(nextVideo.title) (Latency: \(nextVideo.latency ?? -1))")
+                                self?.load(video: nextVideo)
+                                self?.play()
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Current video not found in list (maybe ID mismatch?), default to first
+                 await MainActor.run {
+                    self.sourceList = sortedVideos
+                    self.showSourceList = true
+                    if let first = sortedVideos.first {
+                        self.highlightedVideo = first
+                        DebugLogger.shared.info("Current video not in list. Defaulting to first: \(first.title)")
+                    }
+                 }
+            }
+        }
+    }
+    
+    private func resetSourceListTimer() {
+        sourceListTimer?.invalidate()
+        sourceListTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.showSourceList = false
+                self?.highlightedVideo = nil
+            }
+        }
     }
 }

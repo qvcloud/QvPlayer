@@ -26,30 +26,8 @@ struct PlayerView: View {
                 systemPlayerContent
             }
             
-            // Tips / Error Overlay
-            if showTips, let message = tipsMessage {
-                VStack {
-                    HStack(spacing: 15) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.white)
-                            .font(.system(size: 30))
-                        Text(message)
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.leading)
-                    }
-                    .padding(20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.black.opacity(0.85))
-                            .shadow(radius: 10)
-                    )
-                    .padding(.top, 60)
-                    Spacer()
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(100)
-            }
+            tipsOverlay
+            sourceListOverlay
         }
         .ignoresSafeArea()
         #if os(iOS)
@@ -57,12 +35,23 @@ struct PlayerView: View {
         #endif
         .onAppear {
             print("▶️ [PlayerView] Current Engine: \(playerEngine)")
+            // Sync viewModel with current video for UI state (even if using KSPlayer)
+            if viewModel.currentVideo?.id != video.id {
+                viewModel.currentVideo = video
+            }
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 if playerEngine == "ksplayer" {
                     focusedField = .ksPlayer
                 } else {
                     focusedField = .systemPlayer
                 }
+            }
+        }
+        .onChange(of: video) { _, newVideo in
+            // Sync viewModel when video changes externally
+            if viewModel.currentVideo?.id != newVideo.id {
+                viewModel.currentVideo = newVideo
             }
         }
         .onChange(of: showControls) { _, newValue in
@@ -117,12 +106,22 @@ struct PlayerView: View {
                 }
             }
         }
+        .onChange(of: viewModel.currentVideo) { _, newVideo in
+            if let newVideo = newVideo, newVideo.id != self.video.id {
+                print("🔄 [PlayerView] Syncing video state from ViewModel: \(newVideo.title)")
+                self.video = newVideo
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .queueDidFinish)) { _ in
             print("🏁 [PlayerView] Queue finished, dismissing player")
             dismiss()
         }
         .onExitCommand {
-            dismiss()
+            if viewModel.showSourceList {
+                viewModel.showSourceList = false
+            } else {
+                dismiss()
+            }
         }
         .onDisappear {
             viewModel.stop()
@@ -144,7 +143,11 @@ struct PlayerView: View {
                 }
             }
             .onExitCommand {
-                dismiss()
+                if viewModel.showSourceList {
+                    viewModel.showSourceList = false
+                } else {
+                    dismiss()
+                }
             }
             .onTapGesture {
                 toggleControls(engine: "ksplayer")
@@ -179,8 +182,17 @@ struct PlayerView: View {
                     .edgesIgnoringSafeArea(.all)
                     .focusable()
                     .focused($focusedField, equals: .systemPlayer)
+                    .onMoveCommand { direction in
+                        handleMoveCommand(direction: direction) {
+                            viewModel.seek(by: $0)
+                        }
+                    }
                     .onExitCommand {
-                        dismiss()
+                        if viewModel.showSourceList {
+                            viewModel.showSourceList = false
+                        } else {
+                            dismiss()
+                        }
                     }
                     .overlay {
                         if viewModel.isBuffering {
@@ -226,6 +238,138 @@ struct PlayerView: View {
         }
     }
     
+    // MARK: - Overlays
+    
+    @ViewBuilder
+    var tipsOverlay: some View {
+        if showTips, let message = tipsMessage {
+            VStack {
+                HStack(spacing: 15) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.white)
+                        .font(.system(size: 30))
+                    Text(message)
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                }
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.black.opacity(0.85))
+                        .shadow(radius: 10)
+                )
+                .padding(.top, 60)
+                Spacer()
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .zIndex(100)
+        }
+    }
+    
+    @ViewBuilder
+    var sourceListOverlay: some View {
+        if viewModel.showSourceList {
+            GeometryReader { geometry in
+                HStack {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(video.tvgName ?? video.title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding(.bottom, 5)
+                        
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    ForEach(viewModel.sourceList) { src in
+                                        sourceListItem(src: src)
+                                    }
+                                }
+                            }
+                            .focusable(false) // Ensure ScrollView doesn't steal focus
+                            .frame(maxHeight: geometry.size.height * 0.6)
+                            .onChange(of: viewModel.highlightedVideo) { _, newVideo in
+                                if let video = newVideo {
+                                    withAnimation {
+                                        proxy.scrollTo(video.id, anchor: .center)
+                                    }
+                                }
+                            }
+                            .onAppear {
+                                // Initial scroll to current video
+                                if let video = viewModel.currentVideo {
+                                    proxy.scrollTo(video.id, anchor: .center)
+                                }
+                            }
+                        }
+                    }
+                    .padding()
+                    .frame(width: 600)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.black.opacity(0.85))
+                            .shadow(radius: 10)
+                    )
+                    .padding(.leading, 40)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .transition(.move(edge: .leading).combined(with: .opacity))
+            .zIndex(90)
+        }
+    }
+    
+    @ViewBuilder
+    func sourceListItem(src: Video) -> some View {
+        let isHighlighted = src.id == viewModel.highlightedVideo?.id
+        let isPlaying = src.id == viewModel.currentVideo?.id
+        
+        // Format: host:port/.../filename
+        let host = src.url.host ?? ""
+        let port = src.url.port.map { ":\($0)" } ?? ""
+        let filename = src.url.lastPathComponent
+        let displayString = host.isEmpty ? src.url.absoluteString : "\(host)\(port)/.../\(filename)"
+        
+        HStack(spacing: 4) {
+            if isPlaying {
+                Image(systemName: "play.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+                    .frame(width: 28, alignment: .trailing)
+            } else {
+                if let index = viewModel.sourceList.firstIndex(where: { $0.id == src.id }) {
+                    Text("\(index + 1).")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .frame(width: 28, alignment: .trailing)
+                }
+            }
+            
+            Text(displayString)
+                .font(.caption)
+                .foregroundColor(isPlaying ? .green : .white)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(1)
+            
+            Spacer(minLength: 8)
+            
+            if let latency = src.latency {
+                Text("\(Int(latency))ms")
+                    .font(.caption2)
+                    .foregroundColor(latency < 0 ? .red : (latency < 500 ? .green : .yellow))
+            }
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isHighlighted ? Color.white.opacity(0.2) : (isPlaying ? Color.white.opacity(0.1) : Color.clear))
+        )
+        .id(src.id)
+    }
+    
     // MARK: - Shared Controls
     
     @ViewBuilder
@@ -267,14 +411,50 @@ struct PlayerView: View {
     // MARK: - Helpers
     
     func handleMoveCommand(direction: MoveCommandDirection, onSeek: (Double) -> Void) {
+        // Intercept if Source List is visible
+        if viewModel.showSourceList {
+            print("🎮 [PlayerView] Intercepting MoveCommand for SourceList: \(direction)")
+            switch direction {
+            case .up:
+                viewModel.switchSource(direction: -1, currentVideo: video)
+                return
+            case .down:
+                viewModel.switchSource(direction: 1, currentVideo: video)
+                return
+            case .left, .right:
+                 // Keep list open, reset timer
+                 viewModel.switchSource(direction: 0, currentVideo: video)
+                 return
+            default:
+                break
+            }
+        }
+        
         switch direction {
         case .left:
-            onSeek(-10)
+            if video.isLive {
+                viewModel.switchSource(direction: 0, currentVideo: video)
+            } else {
+                onSeek(-10)
+            }
         case .right:
-            onSeek(10)
-        case .up, .down:
+            if video.isLive {
+                viewModel.switchSource(direction: 0, currentVideo: video)
+            } else {
+                onSeek(10)
+            }
+        case .up:
             showControls = true
             focusedField = .playPause
+            if video.isLive {
+                viewModel.switchChannel(direction: -1)
+            }
+        case .down:
+            showControls = true
+            focusedField = .playPause
+            if video.isLive {
+                viewModel.switchChannel(direction: 1)
+            }
         default:
             break
         }

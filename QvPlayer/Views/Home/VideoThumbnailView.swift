@@ -19,12 +19,29 @@ struct VideoThumbnailView: View {
                     .aspectRatio(contentMode: .fill)
                     .layoutPriority(-1)
             } else {
-                Image(systemName: "play.tv.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 50, height: 50)
-                    .foregroundStyle(.secondary)
-                    .opacity(isLoading ? 0.5 : 1)
+                ZStack {
+                    Image(systemName: video.isLive ? "antenna.radiowaves.left.and.right" : "play.tv.fill")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 50, height: 50)
+                        .foregroundStyle(.secondary)
+                        .opacity(isLoading ? 0.5 : 1)
+                    
+                    if video.isLive {
+                        VStack {
+                            Spacer()
+                            Text("LIVE")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.red)
+                                .foregroundColor(.white)
+                                .cornerRadius(4)
+                                .padding(.bottom, 8)
+                        }
+                    }
+                }
             }
         }
         .task {
@@ -44,6 +61,21 @@ struct VideoThumbnailView: View {
         
         DebugLogger.shared.info("Generating thumbnail for: \(video.title)")
         
+        // 1. Try Remote Thumbnail URL
+        if let thumbURL = video.thumbnailURL {
+            if await fetchRemoteThumbnail(url: thumbURL) {
+                return
+            }
+        }
+        
+        // Optimization: Skip thumbnail generation for live streams to prevent UI blocking
+        if video.isLive {
+            await MainActor.run {
+                self.isLoading = false
+            }
+            return
+        }
+        
         // Resolve localcache:// URL
         var targetURL = video.url
         if video.url.scheme == "localcache" {
@@ -60,7 +92,12 @@ struct VideoThumbnailView: View {
         }
         
         // 1. Try AVAssetImageGenerator first (Fastest, Native)
-        let asset = AVURLAsset(url: targetURL)
+        var assetOptions: [String: Any] = [:]
+        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
+            assetOptions["AVURLAssetHTTPHeaderFieldsKey"] = ["User-Agent": userAgent]
+        }
+        
+        let asset = AVURLAsset(url: targetURL, options: assetOptions)
         
         // Optimization: Don't decode full resolution for thumbnails
         let generator = AVAssetImageGenerator(asset: asset)
@@ -122,5 +159,30 @@ struct VideoThumbnailView: View {
             self.isLoading = false
         }
         #endif
+    }
+    
+    private func fetchRemoteThumbnail(url: URL) async -> Bool {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        
+        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        }
+        
+        do {
+            let (data, response) = try await NetworkManager.shared.session.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200,
+               let uiImage = UIImage(data: data) {
+                await MainActor.run {
+                    self.image = uiImage
+                    self.isLoading = false
+                    CacheManager.shared.saveThumbnail(image: uiImage, id: video.id)
+                }
+                return true
+            }
+        } catch {
+            DebugLogger.shared.warning("Failed to fetch remote thumbnail for \(video.title): \(error.localizedDescription)")
+        }
+        return false
     }
 }

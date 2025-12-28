@@ -104,7 +104,8 @@ class DatabaseManager {
             last_check REAL,
             sort_order INTEGER DEFAULT 0,
             file_size INTEGER,
-            creation_date REAL
+            creation_date REAL,
+            tvg_name TEXT
         );
         """
         DebugLogger.shared.info("📝 [SQL] Executing: \(createTableString)")
@@ -237,7 +238,8 @@ class DatabaseManager {
             ("last_check", "REAL"),
             ("sort_order", "INTEGER DEFAULT 0"),
             ("file_size", "INTEGER"),
-            ("creation_date", "REAL")
+            ("creation_date", "REAL"),
+            ("tvg_name", "TEXT")
         ]
         
         for (name, type) in columns {
@@ -260,8 +262,8 @@ class DatabaseManager {
                 return
             }
             let insertSQL = """
-            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date, tvg_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             DebugLogger.shared.info("📝 [SQL] Executing: INSERT INTO library... \(video.title)")
             
@@ -322,6 +324,12 @@ class DatabaseManager {
                 } else {
                     sqlite3_bind_null(stmt, 13)
                 }
+
+                if let tvgName = video.tvgName {
+                    sqlite3_bind_text(stmt, 14, (tvgName as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 14)
+                }
                 
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     DebugLogger.shared.error("Could not insert video.")
@@ -341,8 +349,8 @@ class DatabaseManager {
             sqlite3_exec(db, "BEGIN TRANSACTION", nil, nil, nil)
             
             let insertSQL = """
-            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO library (id, title, url, group_name, is_live, description, thumbnail_url, cached_url, latency, last_check, sort_order, file_size, creation_date, tvg_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             
             var stmt: OpaquePointer?
@@ -403,6 +411,12 @@ class DatabaseManager {
                     } else {
                         sqlite3_bind_null(stmt, 13)
                     }
+
+                    if let tvgName = video.tvgName {
+                        sqlite3_bind_text(stmt, 14, (tvgName as NSString).utf8String, -1, nil)
+                    } else {
+                        sqlite3_bind_null(stmt, 14)
+                    }
                     
                     if sqlite3_step(stmt) != SQLITE_DONE {
                         DebugLogger.shared.error("Could not insert video in batch.")
@@ -425,7 +439,7 @@ class DatabaseManager {
             UPDATE library SET 
                 title = ?, url = ?, group_name = ?, is_live = ?, description = ?, 
                 thumbnail_url = ?, cached_url = ?, latency = ?, last_check = ?, sort_order = ?,
-                file_size = ?, creation_date = ?
+                file_size = ?, creation_date = ?, tvg_name = ?
             WHERE id = ?;
             """
             DebugLogger.shared.info("📝 [SQL] Executing: UPDATE library... \(video.title)")
@@ -486,8 +500,14 @@ class DatabaseManager {
                 } else {
                     sqlite3_bind_null(stmt, 12)
                 }
+
+                if let tvgName = video.tvgName {
+                    sqlite3_bind_text(stmt, 13, (tvgName as NSString).utf8String, -1, nil)
+                } else {
+                    sqlite3_bind_null(stmt, 13)
+                }
                 
-                sqlite3_bind_text(stmt, 13, (video.id.uuidString as NSString).utf8String, -1, nil)
+                sqlite3_bind_text(stmt, 14, (video.id.uuidString as NSString).utf8String, -1, nil)
                 
                 if sqlite3_step(stmt) != SQLITE_DONE {
                     DebugLogger.shared.error("Could not update video.")
@@ -590,6 +610,11 @@ class DatabaseManager {
                     if sqlite3_column_type(stmt, 12) != SQLITE_NULL {
                         creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 12))
                     }
+
+                    var tvgName: String?
+                    if let ptr = sqlite3_column_text(stmt, 13) {
+                        tvgName = String(cString: ptr)
+                    }
                     
                     if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
                         let video = Video(
@@ -605,7 +630,99 @@ class DatabaseManager {
                             lastLatencyCheck: lastCheck,
                             sortOrder: sortOrder,
                             fileSize: fileSize,
-                            creationDate: creationDate
+                            creationDate: creationDate,
+                            tvgName: tvgName
+                        )
+                        videos.append(video)
+                    }
+                }
+            }
+            sqlite3_finalize(stmt)
+            return videos
+        }
+    }
+    
+    func getVideos(byTvgName name: String) -> [Video] {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return [] }
+            var videos = [Video]()
+            let querySQL = "SELECT * FROM library WHERE tvg_name = ? ORDER BY sort_order DESC;"
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, (name as NSString).utf8String, -1, nil)
+                
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let idStr = String(cString: sqlite3_column_text(stmt, 0))
+                    let title = String(cString: sqlite3_column_text(stmt, 1))
+                    let urlStr = String(cString: sqlite3_column_text(stmt, 2))
+                    
+                    var group: String?
+                    if let ptr = sqlite3_column_text(stmt, 3) {
+                        group = String(cString: ptr)
+                    }
+                    
+                    let isLive = sqlite3_column_int(stmt, 4) != 0
+                    
+                    var description: String?
+                    if let ptr = sqlite3_column_text(stmt, 5) {
+                        description = String(cString: ptr)
+                    }
+                    
+                    var thumbnailURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 6) {
+                        thumbnailURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var cachedURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 7) {
+                        cachedURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var latency: Double?
+                    if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+                        latency = sqlite3_column_double(stmt, 8)
+                    }
+                    
+                    var lastCheck: Date?
+                    if sqlite3_column_type(stmt, 9) != SQLITE_NULL {
+                        lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9))
+                    }
+                    
+                    let sortOrder = Int(sqlite3_column_int(stmt, 10))
+                    
+                    var fileSize: Int64?
+                    if sqlite3_column_type(stmt, 11) != SQLITE_NULL {
+                        fileSize = sqlite3_column_int64(stmt, 11)
+                    }
+                    
+                    var creationDate: Date?
+                    if sqlite3_column_type(stmt, 12) != SQLITE_NULL {
+                        creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 12))
+                    }
+
+                    var tvgName: String?
+                    if let ptr = sqlite3_column_text(stmt, 13) {
+                        tvgName = String(cString: ptr)
+                    }
+                    
+                    if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
+                        let video = Video(
+                            id: id,
+                            title: title,
+                            url: url,
+                            group: group,
+                            isLive: isLive,
+                            description: description,
+                            thumbnailURL: thumbnailURL,
+                            cachedURL: cachedURL,
+                            latency: latency,
+                            lastLatencyCheck: lastCheck,
+                            sortOrder: sortOrder,
+                            fileSize: fileSize,
+                            creationDate: creationDate,
+                            tvgName: tvgName
                         )
                         videos.append(video)
                     }
@@ -631,6 +748,188 @@ class DatabaseManager {
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
+        }
+    }
+    
+    func getVideosForSpeedTest(limit: Int = 10) -> [Video] {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return [] }
+            var videos = [Video]()
+            // Prioritize videos with NULL latency, then oldest check
+            let querySQL = "SELECT * FROM library WHERE latency IS NULL OR last_check IS NULL ORDER BY RANDOM() LIMIT ?;"
+            
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_int(stmt, 1, Int32(limit))
+                
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let idStr = String(cString: sqlite3_column_text(stmt, 0))
+                    let title = String(cString: sqlite3_column_text(stmt, 1))
+                    let urlStr = String(cString: sqlite3_column_text(stmt, 2))
+                    
+                    var group: String?
+                    if let ptr = sqlite3_column_text(stmt, 3) {
+                        group = String(cString: ptr)
+                    }
+                    
+                    let isLive = sqlite3_column_int(stmt, 4) != 0
+                    
+                    var description: String?
+                    if let ptr = sqlite3_column_text(stmt, 5) {
+                        description = String(cString: ptr)
+                    }
+                    
+                    var thumbnailURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 6) {
+                        thumbnailURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var cachedURL: URL?
+                    if let ptr = sqlite3_column_text(stmt, 7) {
+                        cachedURL = URL(string: String(cString: ptr))
+                    }
+                    
+                    var latency: Double?
+                    if sqlite3_column_type(stmt, 8) != SQLITE_NULL {
+                        latency = sqlite3_column_double(stmt, 8)
+                    }
+                    
+                    var lastCheck: Date?
+                    if sqlite3_column_type(stmt, 9) != SQLITE_NULL {
+                        lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9))
+                    }
+                    
+                    let sortOrder = Int(sqlite3_column_int(stmt, 10))
+                    
+                    var fileSize: Int64?
+                    if sqlite3_column_type(stmt, 11) != SQLITE_NULL {
+                        fileSize = sqlite3_column_int64(stmt, 11)
+                    }
+                    
+                    var creationDate: Date?
+                    if sqlite3_column_type(stmt, 12) != SQLITE_NULL {
+                        creationDate = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 12))
+                    }
+
+                    var tvgName: String?
+                    if let ptr = sqlite3_column_text(stmt, 13) {
+                        tvgName = String(cString: ptr)
+                    }
+                    
+                    if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
+                        let video = Video(
+                            id: id,
+                            title: title,
+                            url: url,
+                            group: group,
+                            isLive: isLive,
+                            description: description,
+                            thumbnailURL: thumbnailURL,
+                            cachedURL: cachedURL,
+                            latency: latency,
+                            lastLatencyCheck: lastCheck,
+                            sortOrder: sortOrder,
+                            fileSize: fileSize,
+                            creationDate: creationDate,
+                            tvgName: tvgName
+                        )
+                        videos.append(video)
+                    }
+                }
+            }
+            sqlite3_finalize(stmt)
+            return videos
+        }
+    }
+    
+    func getAdjacentChannel(currentTvgName: String, offset: Int) -> Video? {
+        return queue.sync {
+            ensureDatabaseIsOpen()
+            guard let db = db else { return nil }
+            
+            // 1. Get all distinct tvg_names for live streams, sorted
+            // Note: We use a simple query here. For very large datasets, this should be optimized or cached.
+            let querySQL = "SELECT DISTINCT tvg_name FROM library WHERE is_live = 1 AND tvg_name IS NOT NULL ORDER BY tvg_name ASC;"
+            
+            var tvgNames = [String]()
+            var stmt: OpaquePointer?
+            
+            if sqlite3_prepare_v2(db, querySQL, -1, &stmt, nil) == SQLITE_OK {
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    if let ptr = sqlite3_column_text(stmt, 0) {
+                        tvgNames.append(String(cString: ptr))
+                    }
+                }
+            }
+            sqlite3_finalize(stmt)
+            
+            guard !tvgNames.isEmpty else { return nil }
+            
+            // 2. Find current index
+            guard let currentIndex = tvgNames.firstIndex(of: currentTvgName) else {
+                // If current not found, maybe return first?
+                return nil
+            }
+            
+            // 3. Calculate target index with wrapping
+            var targetIndex = currentIndex + offset
+            if targetIndex < 0 { targetIndex = tvgNames.count - 1 }
+            if targetIndex >= tvgNames.count { targetIndex = 0 }
+            
+            let targetTvgName = tvgNames[targetIndex]
+            
+            // 4. Get best video for target tvg_name
+            // Exclude latency = -1 (failed)
+            // Prioritize lowest positive latency, then NULL (untested)
+            let videoQuery = "SELECT * FROM library WHERE tvg_name = ? AND (latency IS NULL OR latency != -1) ORDER BY CASE WHEN latency IS NULL THEN 1 ELSE 0 END, latency ASC LIMIT 1;"
+            var videoStmt: OpaquePointer?
+            var resultVideo: Video?
+            
+            if sqlite3_prepare_v2(db, videoQuery, -1, &videoStmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(videoStmt, 1, (targetTvgName as NSString).utf8String, -1, nil)
+                
+                if sqlite3_step(videoStmt) == SQLITE_ROW {
+                    // Parse Video (Simplified for brevity, assuming we need basic fields to play)
+                    // We need full object to be safe.
+                    let idStr = String(cString: sqlite3_column_text(videoStmt, 0))
+                    let title = String(cString: sqlite3_column_text(videoStmt, 1))
+                    let urlStr = String(cString: sqlite3_column_text(videoStmt, 2))
+                    
+                    var group: String?
+                    if let ptr = sqlite3_column_text(videoStmt, 3) { group = String(cString: ptr) }
+                    let isLive = sqlite3_column_int(videoStmt, 4) != 0
+                    var description: String?
+                    if let ptr = sqlite3_column_text(videoStmt, 5) { description = String(cString: ptr) }
+                    var thumbnailURL: URL?
+                    if let ptr = sqlite3_column_text(videoStmt, 6) { thumbnailURL = URL(string: String(cString: ptr)) }
+                    var cachedURL: URL?
+                    if let ptr = sqlite3_column_text(videoStmt, 7) { cachedURL = URL(string: String(cString: ptr)) }
+                    var latency: Double?
+                    if sqlite3_column_type(videoStmt, 8) != SQLITE_NULL { latency = sqlite3_column_double(videoStmt, 8) }
+                    var lastCheck: Date?
+                    if sqlite3_column_type(videoStmt, 9) != SQLITE_NULL { lastCheck = Date(timeIntervalSince1970: sqlite3_column_double(videoStmt, 9)) }
+                    let sortOrder = Int(sqlite3_column_int(videoStmt, 10))
+                    var fileSize: Int64?
+                    if sqlite3_column_type(videoStmt, 11) != SQLITE_NULL { fileSize = sqlite3_column_int64(videoStmt, 11) }
+                    var creationDate: Date?
+                    if sqlite3_column_type(videoStmt, 12) != SQLITE_NULL { creationDate = Date(timeIntervalSince1970: sqlite3_column_double(videoStmt, 12)) }
+                    var tvgName: String?
+                    if let ptr = sqlite3_column_text(videoStmt, 13) { tvgName = String(cString: ptr) }
+                    
+                    if let id = UUID(uuidString: idStr), let url = URL(string: urlStr) {
+                        resultVideo = Video(
+                            id: id, title: title, url: url, group: group, isLive: isLive,
+                            description: description, thumbnailURL: thumbnailURL, cachedURL: cachedURL,
+                            latency: latency, lastLatencyCheck: lastCheck, sortOrder: sortOrder,
+                            fileSize: fileSize, creationDate: creationDate, tvgName: tvgName
+                        )
+                    }
+                }
+            }
+            sqlite3_finalize(videoStmt)
+            
+            return resultVideo
         }
     }
     
@@ -938,6 +1237,74 @@ class DatabaseManager {
             }
             sqlite3_finalize(stmt)
             return result
+        }
+    }
+    
+    // MARK: - User Agent Management
+    
+    struct UserAgentItem: Codable {
+        let name: String
+        let value: String
+        let isSystem: Bool
+    }
+    
+    private let systemUserAgents: [UserAgentItem] = [
+        UserAgentItem(name: "Default (Empty)", value: "", isSystem: true),
+        UserAgentItem(name: "Chrome (Windows)", value: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", isSystem: true),
+        UserAgentItem(name: "Safari (macOS)", value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15", isSystem: true),
+        UserAgentItem(name: "iPhone", value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1", isSystem: true),
+        UserAgentItem(name: "iPad", value: "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1", isSystem: true),
+        UserAgentItem(name: "Android Mobile", value: "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36", isSystem: true),
+        UserAgentItem(name: "Smart TV (Generic)", value: "Mozilla/5.0 (Web0S; Linux/SmartTV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Safari/537.36 WebAppManager", isSystem: true)
+    ]
+    
+    func getAllUserAgents() -> [UserAgentItem] {
+        var items = systemUserAgents
+        
+        if let customJson = getConfig(key: "custom_user_agents"),
+           let data = customJson.data(using: .utf8),
+           let customItems = try? JSONDecoder().decode([UserAgentItem].self, from: data) {
+            items.append(contentsOf: customItems)
+        }
+        
+        return items
+    }
+    
+    func addCustomUserAgent(name: String, value: String) {
+        var customItems: [UserAgentItem] = []
+        if let customJson = getConfig(key: "custom_user_agents"),
+           let data = customJson.data(using: .utf8),
+           let existing = try? JSONDecoder().decode([UserAgentItem].self, from: data) {
+            customItems = existing
+        }
+        
+        // Remove existing with same name if any (update)
+        customItems.removeAll { $0.name == name }
+        
+        let newItem = UserAgentItem(name: name, value: value, isSystem: false)
+        customItems.append(newItem)
+        
+        if let data = try? JSONEncoder().encode(customItems),
+           let jsonString = String(data: data, encoding: .utf8) {
+            setConfig(key: "custom_user_agents", value: jsonString)
+        }
+    }
+    
+    func removeCustomUserAgent(name: String) {
+        guard var customItems: [UserAgentItem] = {
+            if let customJson = getConfig(key: "custom_user_agents"),
+               let data = customJson.data(using: .utf8),
+               let existing = try? JSONDecoder().decode([UserAgentItem].self, from: data) {
+                return existing
+            }
+            return []
+        }() else { return }
+        
+        customItems.removeAll { $0.name == name }
+        
+        if let data = try? JSONEncoder().encode(customItems),
+           let jsonString = String(data: data, encoding: .utf8) {
+            setConfig(key: "custom_user_agents", value: jsonString)
         }
     }
 }

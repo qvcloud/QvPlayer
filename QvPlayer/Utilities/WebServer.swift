@@ -267,6 +267,10 @@ class WebServer {
             if responseBody == nil { success = false; message = "Failed to serialize" }
         } else if method == "GET" && path == "/api/v1/status" {
             responseBody = WebAPIController.shared.handleGetStatus(currentStatus: currentStatus)
+        } else if method == "GET" && path == "/api/v1/config" {
+            responseBody = WebAPIController.shared.handleGetConfig()
+        } else if method == "PUT" && path == "/api/v1/config" {
+            (success, message) = WebAPIController.shared.handleUpdateConfig(body: bodyString)
         } else if method == "POST" && path == "/api/v1/videos" {
             (success, message) = WebAPIController.shared.handleAddVideo(body: bodyString)
         } else if method == "DELETE" && path == "/api/v1/videos" {

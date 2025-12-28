@@ -72,7 +72,33 @@ class HomeViewModel: ObservableObject {
             return $0 < $1
         }
         self.liveVideoGroups = liveSortedKeys.map { key in
-            VideoGroup(name: key, videos: liveGrouped[key] ?? [])
+            let videosInGroup = liveGrouped[key] ?? []
+            
+            // Count sources per tvgName
+            var sourceCounts: [String: Int] = [:]
+            for video in videosInGroup {
+                if let tvgName = video.tvgName {
+                    sourceCounts[tvgName, default: 0] += 1
+                }
+            }
+            
+            // Deduplicate by tvgName
+            var seenTvgNames = Set<String>()
+            var uniqueVideos: [Video] = []
+            
+            for var video in videosInGroup {
+                if let tvgName = video.tvgName {
+                    if !seenTvgNames.contains(tvgName) {
+                        seenTvgNames.insert(tvgName)
+                        video.sourceCount = sourceCounts[tvgName] ?? 1
+                        uniqueVideos.append(video)
+                    }
+                } else {
+                    uniqueVideos.append(video)
+                }
+            }
+            
+            return VideoGroup(name: key, videos: uniqueVideos)
         }
         
         // Keep original for backward compatibility if needed, or just union
@@ -138,10 +164,15 @@ class HomeViewModel: ObservableObject {
         let start = Date()
         var request = URLRequest(url: video.url)
         request.httpMethod = "HEAD"
-        request.timeoutInterval = 5
+        request.timeoutInterval = 30 // Increased timeout for live streams
+        
+        // Add User-Agent if configured
+        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
+            request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        }
         
         do {
-            let (_, _) = try await URLSession.shared.data(for: request)
+            let (_, _) = try await NetworkManager.shared.session.data(for: request)
             let duration = Date().timeIntervalSince(start) * 1000 // ms
             
             await MainActor.run {

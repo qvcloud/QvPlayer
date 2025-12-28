@@ -21,6 +21,10 @@ class WebAPIController {
                 "sortOrder": video.sortOrder
             ]
             
+            if let tvgName = video.tvgName {
+                dict["tvgName"] = tvgName
+            }
+            
             if let latency = video.latency {
                 dict["latency"] = latency
             }
@@ -71,6 +75,106 @@ class WebAPIController {
             return String(data: data, encoding: .utf8)
         }
         return nil
+    }
+    
+    func handleGetConfig() -> String? {
+        let userAgent = DatabaseManager.shared.getConfig(key: "user_agent") ?? ""
+        let hardwareDecode = DatabaseManager.shared.getConfig(key: "hardware_decode") ?? "true"
+        let fastOpen = DatabaseManager.shared.getConfig(key: "fast_open") ?? "true"
+        let rtspTransport = DatabaseManager.shared.getConfig(key: "rtsp_transport") ?? "tcp"
+        let bufferDuration = DatabaseManager.shared.getConfig(key: "buffer_duration") ?? "20"
+        
+        // Proxy Settings (UserDefaults)
+        let proxyEnabled = UserDefaults.standard.bool(forKey: "proxyEnabled")
+        let proxyHost = UserDefaults.standard.string(forKey: "proxyHost") ?? ""
+        let proxyPort = UserDefaults.standard.string(forKey: "proxyPort") ?? ""
+        let proxyUsername = UserDefaults.standard.string(forKey: "proxyUsername") ?? ""
+        let proxyPassword = UserDefaults.standard.string(forKey: "proxyPassword") ?? ""
+        
+        let allUserAgents = DatabaseManager.shared.getAllUserAgents()
+        let userAgentsDict = allUserAgents.map { [
+            "name": $0.name,
+            "value": $0.value,
+            "isSystem": $0.isSystem
+        ] }
+        
+        let config: [String: Any] = [
+            "userAgent": userAgent,
+            "hardwareDecode": hardwareDecode == "true",
+            "fastOpen": fastOpen == "true",
+            "rtspTransport": rtspTransport,
+            "bufferDuration": Int(bufferDuration) ?? 20,
+            "userAgents": userAgentsDict,
+            "proxyEnabled": proxyEnabled,
+            "proxyHost": proxyHost,
+            "proxyPort": proxyPort,
+            "proxyUsername": proxyUsername,
+            "proxyPassword": proxyPassword
+        ]
+        
+        if let data = try? JSONSerialization.data(withJSONObject: config) {
+            return String(data: data, encoding: .utf8)
+        }
+        return nil
+    }
+    
+    func handleUpdateConfig(body: String) -> (success: Bool, message: String?) {
+        guard let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (false, "Invalid JSON")
+        }
+        
+        if let userAgent = json["userAgent"] as? String {
+            DatabaseManager.shared.setConfig(key: "user_agent", value: userAgent)
+            DebugLogger.shared.info("Config updated: User-Agent = \(userAgent)")
+        }
+        
+        if let hardwareDecode = json["hardwareDecode"] as? Bool {
+            DatabaseManager.shared.setConfig(key: "hardware_decode", value: hardwareDecode ? "true" : "false")
+        }
+        
+        if let fastOpen = json["fastOpen"] as? Bool {
+            DatabaseManager.shared.setConfig(key: "fast_open", value: fastOpen ? "true" : "false")
+        }
+        
+        if let rtspTransport = json["rtspTransport"] as? String {
+            DatabaseManager.shared.setConfig(key: "rtsp_transport", value: rtspTransport)
+        }
+        
+        if let bufferDuration = json["bufferDuration"] as? Int {
+            DatabaseManager.shared.setConfig(key: "buffer_duration", value: String(bufferDuration))
+        }
+        
+        // Proxy Settings
+        if let proxyEnabled = json["proxyEnabled"] as? Bool {
+            UserDefaults.standard.set(proxyEnabled, forKey: "proxyEnabled")
+        }
+        if let proxyHost = json["proxyHost"] as? String {
+            UserDefaults.standard.set(proxyHost, forKey: "proxyHost")
+        }
+        if let proxyPort = json["proxyPort"] as? String {
+            UserDefaults.standard.set(proxyPort, forKey: "proxyPort")
+        }
+        if let proxyUsername = json["proxyUsername"] as? String {
+            UserDefaults.standard.set(proxyUsername, forKey: "proxyUsername")
+        }
+        if let proxyPassword = json["proxyPassword"] as? String {
+            UserDefaults.standard.set(proxyPassword, forKey: "proxyPassword")
+        }
+        
+        // Handle Custom User Agent Management
+        if let action = json["uaAction"] as? String {
+            if action == "add",
+               let name = json["uaName"] as? String,
+               let value = json["uaValue"] as? String {
+                DatabaseManager.shared.addCustomUserAgent(name: name, value: value)
+            } else if action == "delete",
+                      let name = json["uaName"] as? String {
+                DatabaseManager.shared.removeCustomUserAgent(name: name)
+            }
+        }
+        
+        return (true, "Configuration updated")
     }
     
     func handleAddVideo(body: String) -> (success: Bool, message: String?) {

@@ -154,6 +154,54 @@ struct WebAssets {
                     text-overflow: ellipsis;
                 }
                 
+                /* Grouped View */
+                .group-container {
+                    border: 1px solid #e5e5ea;
+                    border-radius: 12px;
+                    margin-bottom: 10px;
+                    overflow: hidden;
+                    background: white;
+                }
+                .group-header {
+                    background: #f2f2f7;
+                    padding: 12px 16px;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .group-header:hover {
+                    background: #e5e5ea;
+                }
+                .group-content {
+                    display: none;
+                    border-top: 1px solid #e5e5ea;
+                }
+                .group-content.expanded {
+                    display: block;
+                }
+                .group-subitem {
+                    padding: 10px 16px 10px 24px;
+                    border-bottom: 1px solid #f0f0f0;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    background: white;
+                }
+                .group-subitem:last-child {
+                    border-bottom: none;
+                }
+                .group-badge {
+                    background: #007AFF;
+                    color: white;
+                    font-size: 10px;
+                    padding: 2px 6px;
+                    border-radius: 10px;
+                    margin-left: 8px;
+                }
+                
                 .time-display {
                     font-family: "SF Mono", SFMono-Regular, ui-monospace, monospace;
                     font-size: 24px;
@@ -351,6 +399,82 @@ struct WebAssets {
                     color: white;
                     border-color: var(--primary-color);
                 }
+
+                /* Grouping Styles */
+                .group-container {
+                    margin-bottom: 12px;
+                    border: 1px solid #e5e5ea;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }
+                .group-header {
+                    padding: 12px 16px;
+                    background: #f5f5f7;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    user-select: none;
+                }
+                .group-header:hover {
+                    background: #ebebf0;
+                }
+                .group-title {
+                    font-weight: 600;
+                    font-size: 14px;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                }
+                .group-count {
+                    font-size: 12px;
+                    color: #86868b;
+                    background: rgba(0,0,0,0.05);
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                }
+                .group-content {
+                    display: none;
+                    border-top: 1px solid #e5e5ea;
+                }
+                .group-content.expanded {
+                    display: block;
+                }
+                .group-arrow {
+                    transition: transform 0.2s;
+                }
+                .group-header.expanded .group-arrow {
+                    transform: rotate(90deg);
+                }
+                .sub-item {
+                    padding: 10px 16px;
+                    border-bottom: 1px solid #f5f5f7;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    background: white;
+                }
+                .sub-item:last-child {
+                    border-bottom: none;
+                }
+                .sub-item:hover {
+                    background: #f9f9fa;
+                }
+                .sub-item-info {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    flex: 1;
+                }
+                .sub-item-title {
+                    font-size: 13px;
+                    color: #1d1d1f;
+                }
+                .sub-item-url {
+                    font-size: 11px;
+                    color: #86868b;
+                    font-family: monospace;
+                }
             </style>
         </head>
         <body>
@@ -382,12 +506,6 @@ struct WebAssets {
 
                 <!-- Main Content -->
                 <div class="main-content">
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 8px;">
-                        <label style="display: flex; align-items: center; cursor: pointer; font-size: 12px; color: var(--secondary-text); background: var(--card-bg); padding: 4px 10px; border-radius: 16px; box-shadow: var(--shadow);">
-                            <input type="checkbox" id="debugOverlay" onchange="toggleDebug(this)" style="margin-right: 6px; width: auto; margin-bottom: 0;"> Debug Overlay
-                        </label>
-                    </div>
-
                     <div class="card">
                         <div class="status-display">
                         <div class="status-title">NOW PLAYING</div>
@@ -431,6 +549,7 @@ struct WebAssets {
                     <button class="tab-btn active" onclick="switchTab('media')">Media</button>
                     <button class="tab-btn" onclick="switchTab('groups')">Groups</button>
                     <button class="tab-btn" onclick="switchTab('upload')">Upload</button>
+                    <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
                 </div>
                 
                 <div id="tab-media" class="tab-content">
@@ -529,6 +648,81 @@ struct WebAssets {
                     </div>
                 </div>
 
+                <div id="tab-settings" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <h2>Player Configuration</h2>
+                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Configure global player settings.</p>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <label style="font-size: 14px; font-weight: 500;">User-Agent</label>
+                            <div style="display: flex; gap: 8px;">
+                                <select id="userAgentSelect" onchange="selectUserAgent(this.value)" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7; background: white;">
+                                    <option value="">Select a preset...</option>
+                                </select>
+                                <button onclick="openAddUAModal()" class="btn secondary" style="width: auto; padding: 0 12px;">+</button>
+                            </div>
+                            <input type="text" id="configUserAgent" placeholder="Custom User-Agent String" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <div id="uaActions" style="display: none; justify-content: flex-end;">
+                                <button onclick="deleteSelectedUA()" class="btn danger" style="font-size: 12px; padding: 4px 8px;">Delete Preset</button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 14px; font-weight: 500;">RTSP Transport</label>
+                                <select id="configRtspTransport" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7; background: white;">
+                                    <option value="tcp">TCP (Reliable)</option>
+                                    <option value="udp">UDP (Low Latency)</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                <label style="font-size: 14px; font-weight: 500;">Buffer Duration (sec)</label>
+                                <input type="number" id="configBufferDuration" placeholder="20" min="1" max="60" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            </div>
+                        </div>
+
+                        <!-- Proxy Settings -->
+                        <div style="margin-top: 16px; margin-bottom: 12px; border-top: 1px solid #e5e5ea; padding-top: 16px;">
+                            <h3 style="font-size: 16px; margin: 0 0 12px 0; color: var(--text-color);">Proxy Settings</h3>
+                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px; font-weight: 500; margin-bottom: 12px;">
+                                <input type="checkbox" id="configProxyEnabled" onchange="toggleProxyFields()" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Enable Proxy
+                            </label>
+                            
+                            <div id="proxyFields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; opacity: 0.5; pointer-events: none;">
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 14px; font-weight: 500;">Host</label>
+                                    <input type="text" id="configProxyHost" placeholder="192.168.1.1" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 14px; font-weight: 500;">Port</label>
+                                    <input type="text" id="configProxyPort" placeholder="8080" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 14px; font-weight: 500;">Username (Optional)</label>
+                                    <input type="text" id="configProxyUsername" placeholder="Username" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    <label style="font-size: 14px; font-weight: 500;">Password (Optional)</label>
+                                    <input type="password" id="configProxyPassword" placeholder="Password" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px; font-weight: 500;">
+                                <input type="checkbox" id="configHardwareDecode" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Hardware Decoding (VideoToolbox)
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px; font-weight: 500;">
+                                <input type="checkbox" id="configFastOpen" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Fast Open (Reduce start delay)
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 14px; font-weight: 500;">
+                                <input type="checkbox" id="debugOverlay" onchange="toggleDebug(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Show Debug Overlay
+                            </label>
+                        </div>
+                        <button onclick="saveConfig()" class="btn" id="saveConfigBtn">Save Configuration</button>
+                        <div id="configStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
+                    </div>
+                </div>
+
                 <footer style="text-align: center; margin-top: 40px; padding-bottom: 20px; color: var(--secondary-text); font-size: 14px;">
                     <p>&copy; <span id="year"></span> QvPlayer. All rights reserved.</p>
                     <p>Open Source: <a href="https://github.com/qvcloud/QvPlayer" target="_blank" style="color: var(--primary-color); text-decoration: none;">https://github.com/qvcloud/QvPlayer</a></p>
@@ -573,6 +767,19 @@ struct WebAssets {
                 </div>
             </div>
 
+            <!-- Add User Agent Modal -->
+            <div id="addUAModal" class="modal">
+                <div class="modal-content">
+                    <h2>Add Custom User-Agent</h2>
+                    <input type="text" id="newUAName" placeholder="Preset Name (e.g. My Browser)" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 16px; margin-bottom: 12px; box-sizing: border-box;">
+                    <textarea id="newUAValue" placeholder="User-Agent String" style="width: 100%; padding: 12px; border: 1px solid #d2d2d7; border-radius: 10px; font-size: 14px; margin-bottom: 12px; box-sizing: border-box; height: 80px; resize: vertical;"></textarea>
+                    <div class="modal-actions">
+                        <button onclick="closeAddUAModal()" class="btn secondary">Cancel</button>
+                        <button onclick="saveNewUA()" class="btn">Save</button>
+                    </div>
+                </div>
+            </div>
+
             <script>
                 let currentVideos = [];
                 let currentQueue = [];
@@ -582,6 +789,7 @@ struct WebAssets {
                 const itemsPerPage = 20;
                 let searchQuery = '';
                 let loopEnabled = false;
+                let userAgentsList = [];
                 
                 // Initialize Loop Checkbox
                 document.addEventListener('DOMContentLoaded', () => {
@@ -951,6 +1159,190 @@ struct WebAssets {
                         })
                         .catch(err => console.error('Failed to load media:', err));
                 }
+
+                function loadConfig() {
+                    fetch('/api/v1/config')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.userAgent !== undefined) document.getElementById('configUserAgent').value = data.userAgent;
+                            if (data.hardwareDecode !== undefined) document.getElementById('configHardwareDecode').checked = data.hardwareDecode;
+                            if (data.fastOpen !== undefined) document.getElementById('configFastOpen').checked = data.fastOpen;
+                            if (data.rtspTransport !== undefined) document.getElementById('configRtspTransport').value = data.rtspTransport;
+                            if (data.bufferDuration !== undefined) document.getElementById('configBufferDuration').value = data.bufferDuration;
+                            
+                            // Proxy Settings
+                            if (data.proxyEnabled !== undefined) {
+                                document.getElementById('configProxyEnabled').checked = data.proxyEnabled;
+                                toggleProxyFields();
+                            }
+                            if (data.proxyHost !== undefined) document.getElementById('configProxyHost').value = data.proxyHost;
+                            if (data.proxyPort !== undefined) document.getElementById('configProxyPort').value = data.proxyPort;
+                            if (data.proxyUsername !== undefined) document.getElementById('configProxyUsername').value = data.proxyUsername;
+                            if (data.proxyPassword !== undefined) document.getElementById('configProxyPassword').value = data.proxyPassword;
+                            
+                            if (data.userAgents) {
+                                userAgentsList = data.userAgents;
+                                renderUserAgents();
+                                // Try to match current UA to a preset
+                                const match = userAgentsList.find(ua => ua.value === data.userAgent);
+                                if (match) {
+                                    document.getElementById('userAgentSelect').value = match.name;
+                                    updateUAActions(match);
+                                }
+                            }
+                        })
+                        .catch(err => console.error('Failed to load config:', err));
+                }
+                
+                function toggleProxyFields() {
+                    const enabled = document.getElementById('configProxyEnabled').checked;
+                    const fields = document.getElementById('proxyFields');
+                    if (enabled) {
+                        fields.style.opacity = '1';
+                        fields.style.pointerEvents = 'auto';
+                    } else {
+                        fields.style.opacity = '0.5';
+                        fields.style.pointerEvents = 'none';
+                    }
+                }
+                
+                function renderUserAgents() {
+                    const select = document.getElementById('userAgentSelect');
+                    select.innerHTML = '<option value="">Select a preset...</option>';
+                    
+                    userAgentsList.forEach(ua => {
+                        const option = document.createElement('option');
+                        option.value = ua.name;
+                        option.textContent = ua.name + (ua.isSystem ? '' : ' (Custom)');
+                        select.appendChild(option);
+                    });
+                }
+                
+                function selectUserAgent(name) {
+                    const ua = userAgentsList.find(item => item.name === name);
+                    if (ua) {
+                        document.getElementById('configUserAgent').value = ua.value;
+                        updateUAActions(ua);
+                    } else {
+                        updateUAActions(null);
+                    }
+                }
+                
+                function updateUAActions(ua) {
+                    const actionsDiv = document.getElementById('uaActions');
+                    if (ua && !ua.isSystem) {
+                        actionsDiv.style.display = 'flex';
+                    } else {
+                        actionsDiv.style.display = 'none';
+                    }
+                }
+                
+                function openAddUAModal() {
+                    document.getElementById('newUAName').value = '';
+                    document.getElementById('newUAValue').value = document.getElementById('configUserAgent').value;
+                    document.getElementById('addUAModal').classList.add('active');
+                }
+                
+                function closeAddUAModal() {
+                    document.getElementById('addUAModal').classList.remove('active');
+                }
+                
+                function saveNewUA() {
+                    const name = document.getElementById('newUAName').value.trim();
+                    const value = document.getElementById('newUAValue').value.trim();
+                    
+                    if (!name || !value) {
+                        alert('Name and User-Agent string are required');
+                        return;
+                    }
+                    
+                    fetch('/api/v1/config', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            uaAction: 'add',
+                            uaName: name,
+                            uaValue: value
+                        })
+                    }).then(() => {
+                        closeAddUAModal();
+                        loadConfig(); // Reload to get updated list
+                    });
+                }
+                
+                function deleteSelectedUA() {
+                    const select = document.getElementById('userAgentSelect');
+                    const name = select.value;
+                    if (!name) return;
+                    
+                    if (!confirm('Delete custom User-Agent "' + name + '"?')) return;
+                    
+                    fetch('/api/v1/config', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            uaAction: 'delete',
+                            uaName: name
+                        })
+                    }).then(() => {
+                        document.getElementById('configUserAgent').value = '';
+                        loadConfig();
+                    });
+                }
+
+                function saveConfig() {
+                    const userAgent = document.getElementById('configUserAgent').value.trim();
+                    const hardwareDecode = document.getElementById('configHardwareDecode').checked;
+                    const fastOpen = document.getElementById('configFastOpen').checked;
+                    const rtspTransport = document.getElementById('configRtspTransport').value;
+                    const bufferDuration = parseInt(document.getElementById('configBufferDuration').value) || 20;
+                    
+                    // Proxy Settings
+                    const proxyEnabled = document.getElementById('configProxyEnabled').checked;
+                    const proxyHost = document.getElementById('configProxyHost').value.trim();
+                    const proxyPort = document.getElementById('configProxyPort').value.trim();
+                    const proxyUsername = document.getElementById('configProxyUsername').value.trim();
+                    const proxyPassword = document.getElementById('configProxyPassword').value.trim();
+                    
+                    const btn = document.getElementById('saveConfigBtn');
+                    const status = document.getElementById('configStatus');
+                    
+                    btn.disabled = true;
+                    status.textContent = 'Saving...';
+                    
+                    const configData = {
+                        userAgent: userAgent,
+                        hardwareDecode: hardwareDecode,
+                        fastOpen: fastOpen,
+                        rtspTransport: rtspTransport,
+                        bufferDuration: bufferDuration,
+                        proxyEnabled: proxyEnabled,
+                        proxyHost: proxyHost,
+                        proxyPort: proxyPort,
+                        proxyUsername: proxyUsername,
+                        proxyPassword: proxyPassword
+                    };
+                    
+                    fetch('/api/v1/config', {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(configData)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        btn.disabled = false;
+                        if (data.success) {
+                            status.textContent = 'Saved successfully';
+                            setTimeout(() => status.textContent = '', 3000);
+                        } else {
+                            status.textContent = 'Error: ' + (data.message || 'Unknown');
+                        }
+                    })
+                    .catch(err => {
+                        btn.disabled = false;
+                        status.textContent = 'Error: ' + err;
+                    });
+                }
                 
                 function renderSidebar() {
                     const list = document.getElementById('sidebarList');
@@ -1095,6 +1487,166 @@ struct WebAssets {
                     renderMedia();
                 }
 
+                // Grouping Helper Functions
+                function renderLiveGrouped(videos, list) {
+                    // Group by tvgName
+                    const groups = {};
+                    videos.forEach(video => {
+                        const key = video.tvgName || video.title;
+                        if (!groups[key]) {
+                            groups[key] = [];
+                        }
+                        groups[key].push(video);
+                    });
+
+                    // Sort groups by key
+                    const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+                    // Pagination for groups
+                    const totalPages = Math.ceil(sortedKeys.length / itemsPerPage);
+                    if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+                    
+                    const start = (currentPage - 1) * itemsPerPage;
+                    const end = start + itemsPerPage;
+                    const pageKeys = sortedKeys.slice(start, end);
+
+                    pageKeys.forEach((key, index) => {
+                        const groupVideos = groups[key];
+                        const groupContainer = document.createElement('div');
+                        groupContainer.className = 'group-container';
+                        
+                        // Use a safe ID based on index to avoid issues with special characters in key
+                        const groupId = 'group-auto-' + index;
+
+                        groupContainer.innerHTML = `
+                            <div class="group-header" onclick="toggleGroup('${groupId}')">
+                                <div class="group-title">
+                                    <svg class="group-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9 18l6-6-6-6"/>
+                                    </svg>
+                                    ${escapeHtml(key)}
+                                    <span class="group-count">${groupVideos.length} sources</span>
+                                </div>
+                                <div class="action-group">
+                                    <!-- Group actions if needed -->
+                                </div>
+                            </div>
+                            <div id="${groupId}" class="group-content">
+                                <!-- Items will be rendered here -->
+                            </div>
+                        `;
+                        
+                        list.appendChild(groupContainer);
+                        
+                        const contentDiv = document.getElementById(groupId);
+                        groupVideos.forEach(video => {
+                            contentDiv.appendChild(renderGroupItem(video));
+                        });
+                    });
+
+                    renderPagination(totalPages);
+                }
+
+                function toggleGroup(id) {
+                    const content = document.getElementById(id);
+                    const header = content.previousElementSibling;
+                    
+                    if (content.classList.contains('expanded')) {
+                        content.classList.remove('expanded');
+                        header.classList.remove('expanded');
+                    } else {
+                        content.classList.add('expanded');
+                        header.classList.add('expanded');
+                    }
+                }
+
+                function renderGroupItem(video) {
+                    const div = document.createElement('div');
+                    div.className = 'sub-item';
+                    const index = video.originalIndex;
+                    
+                    let latencyBadge = '';
+                    if (video.latency !== undefined) {
+                        const latency = video.latency;
+                        if (latency < 0) {
+                            latencyBadge = '<span class="badge latency-bad">Timeout</span>';
+                        } else if (latency < 200) {
+                            latencyBadge = `<span class="badge latency-good">${Math.round(latency)}ms</span>`;
+                        } else if (latency < 500) {
+                            latencyBadge = `<span class="badge latency-medium">${Math.round(latency)}ms</span>`;
+                        } else {
+                            latencyBadge = `<span class="badge latency-bad">${Math.round(latency)}ms</span>`;
+                        }
+                    }
+
+                    div.innerHTML = `
+                        <div class="sub-item-info">
+                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                <div class="sub-item-title">${escapeHtml(video.title)}</div>
+                                <div class="sub-item-url">${escapeHtml(video.url)}</div>
+                            </div>
+                            ${latencyBadge}
+                        </div>
+                        <div class="action-group">
+                            <button class="icon-btn" onclick="playVideo(${index})" title="Play">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            <button class="icon-btn" onclick="addToQueue(${index})" title="Add to Queue">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 5v14M5 12h14"/>
+                                </svg>
+                            </button>
+                            <button class="icon-btn" onclick="openEdit(${index})" title="Edit">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button class="icon-btn danger" onclick="deleteVideo(${index})" title="Delete">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        </div>
+                    `;
+                    return div;
+                }
+
+                function renderPagination(totalPages) {
+                    const pagination = document.getElementById('pagination');
+                    if (totalPages <= 1) {
+                        pagination.style.display = 'none';
+                        return;
+                    }
+                    
+                    pagination.style.display = 'flex';
+                    let html = '';
+                    
+                    // Prev
+                    html += `<button class="page-btn" onclick="setPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>&lt;</button>`;
+                    
+                    // Pages
+                    let startPage = Math.max(1, currentPage - 2);
+                    let endPage = Math.min(totalPages, startPage + 4);
+                    if (endPage - startPage < 4) {
+                        startPage = Math.max(1, endPage - 4);
+                    }
+                    
+                    if (startPage > 1) {
+                        html += `<button class="page-btn" onclick="setPage(1)">1</button>`;
+                        if (startPage > 2) html += `<span>...</span>`;
+                    }
+                    
+                    for (let i = startPage; i <= endPage; i++) {
+                        html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="setPage(${i})">${i}</button>`;
+                    }
+                    
+                    if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) html += `<span>...</span>`;
+                        html += `<button class="page-btn" onclick="setPage(${totalPages})">${totalPages}</button>`;
+                    }
+                    
+                    // Next
+                    html += `<button class="page-btn" onclick="setPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>&gt;</button>`;
+                    
+                    pagination.innerHTML = html;
+                }
+
                 function renderMedia() {
                     const list = document.getElementById('mediaList');
                     list.innerHTML = '';
@@ -1116,6 +1668,12 @@ struct WebAssets {
                         
                         return true;
                     });
+
+                    // Special handling for Live TV grouping
+                    if (currentFilter === 'live') {
+                        renderLiveGrouped(filteredVideos, list);
+                        return;
+                    }
                     
                     // 2. Paginate
                     const totalPages = Math.ceil(filteredVideos.length / itemsPerPage);
@@ -1581,6 +2139,7 @@ struct WebAssets {
                 setInterval(updateStatus, 1000);
                 updateStatus();
                 loadMedia();
+                loadConfig();
             </script>
         </body>
         </html>

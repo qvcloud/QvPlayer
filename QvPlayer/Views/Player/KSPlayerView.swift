@@ -14,6 +14,15 @@ struct KSPlayerView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         print("▶️ [KSPlayerView] Initializing KSPlayer")
         DebugLogger.shared.info("[KSPlayerView] Initializing KSPlayer")
+        
+        /*
+        #if canImport(FFmpegKit)
+        // FFmpegKit logging is currently causing compilation issues.
+        // Disabling direct FFmpeg logging for now.
+        // To enable, we need to ensure FFmpegKitConfig and LogLevel are available.
+        #endif
+        */
+        
         let playerView = UIView()
         playerView.backgroundColor = .black
         
@@ -87,14 +96,59 @@ struct KSPlayerView: UIViewRepresentable {
     #if canImport(KSPlayer)
     private func createOptions() -> KSOptions {
         let options = KSOptions()
+        
+        // Load Config
+        let hardwareDecode = DatabaseManager.shared.getConfig(key: "hardware_decode") ?? "true"
+        let fastOpen = DatabaseManager.shared.getConfig(key: "fast_open") ?? "true"
+        let rtspTransport = DatabaseManager.shared.getConfig(key: "rtsp_transport") ?? "tcp"
+        let bufferDuration = DatabaseManager.shared.getConfig(key: "buffer_duration") ?? "20"
+        
         // Performance Optimizations
-        options.hardwareDecode = true // Enable Hardware Acceleration (VideoToolbox)
-        options.isSecondOpen = true   // Enable fast open
+        options.hardwareDecode = (hardwareDecode == "true") // Enable Hardware Acceleration (VideoToolbox)
+        options.isSecondOpen = (fastOpen == "true")   // Enable fast open
         
         // Network optimizations
         options.cache = true
         // Increase buffer size to avoid stuttering on network videos
-        options.maxBufferDuration = 20 
+        options.maxBufferDuration = TimeInterval(Int(bufferDuration) ?? 20)
+        
+        // RTSP Transport
+        if rtspTransport == "udp" {
+            options.formatContextOptions["rtsp_transport"] = "udp"
+        } else {
+            options.formatContextOptions["rtsp_transport"] = "tcp"
+        }
+        
+        // User-Agent
+        if let userAgent = DatabaseManager.shared.getConfig(key: "user_agent"), !userAgent.isEmpty {
+            options.userAgent = userAgent
+            DebugLogger.shared.info("[KSPlayer] Using custom User-Agent: \(userAgent)")
+        }
+        
+        // Proxy
+        if UserDefaults.standard.bool(forKey: "proxyEnabled") {
+            let host = UserDefaults.standard.string(forKey: "proxyHost") ?? ""
+            let port = UserDefaults.standard.string(forKey: "proxyPort") ?? "8080"
+            let user = UserDefaults.standard.string(forKey: "proxyUsername") ?? ""
+            let pass = UserDefaults.standard.string(forKey: "proxyPassword") ?? ""
+            
+            if !host.isEmpty {
+                var proxyString = ""
+                if !user.isEmpty {
+                    // URL Encode username and password
+                    let safeUser = user.addingPercentEncoding(withAllowedCharacters: .urlUserAllowed) ?? user
+                    let safePass = pass.addingPercentEncoding(withAllowedCharacters: .urlPasswordAllowed) ?? pass
+                    proxyString = "http://\(safeUser):\(safePass)@\(host):\(port)"
+                } else {
+                    proxyString = "http://\(host):\(port)"
+                }
+                
+                options.formatContextOptions["http_proxy"] = proxyString
+                // Mask password in logs
+                let logString = proxyString.replacingOccurrences(of: ":[^@]+@", with: ":***@", options: .regularExpression)
+                DebugLogger.shared.info("[KSPlayer] Using Proxy: \(logString)")
+            }
+        }
         
         // Enable detailed logging
         // options.setShowDebugLog(true) // API not available in this version

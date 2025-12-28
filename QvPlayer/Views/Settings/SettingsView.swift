@@ -28,6 +28,15 @@ struct SettingsView: View {
                     Text("KSPlayer (FFmpeg)").tag("ksplayer")
                 }
                 
+                NavigationLink(destination: UserAgentSettingsView()) {
+                    HStack {
+                        Text("User Agent")
+                        Spacer()
+                        Text(DatabaseManager.shared.getConfig(key: "user_agent")?.isEmpty == false ? "Custom" : "Default")
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
                 Picker("Language", selection: $selectedLanguage) {
                     Text("Follow System").tag("system")
                     Text("English").tag("en")
@@ -180,5 +189,104 @@ struct SettingsView: View {
                 cacheSizeString = CacheManager.shared.formatSize(size)
             }
         }
+    }
+}
+
+struct UserAgentSettingsView: View {
+    @State private var userAgents: [DatabaseManager.UserAgentItem] = []
+    @State private var currentUserAgent: String = ""
+    @State private var showAddSheet = false
+    @State private var newName = ""
+    @State private var newValue = ""
+    
+    var body: some View {
+        Form {
+            Section(header: Text("Current User Agent")) {
+                Text(currentUserAgent.isEmpty ? "Default (Empty)" : currentUserAgent)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Section(header: Text("Presets")) {
+                List {
+                    ForEach(userAgents, id: \.name) { item in
+                        Button(action: {
+                            DatabaseManager.shared.setConfig(key: "user_agent", value: item.value)
+                            currentUserAgent = item.value
+                        }) {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(item.name)
+                                        .foregroundColor(.primary)
+                                    if !item.value.isEmpty {
+                                        Text(item.value)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                if item.value == currentUserAgent {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete(perform: deleteUserAgent)
+                }
+            }
+            
+            Section {
+                Button("Add Custom User Agent") {
+                    showAddSheet = true
+                }
+            }
+        }
+        .navigationTitle("User Agent")
+        .onAppear(perform: loadData)
+        .sheet(isPresented: $showAddSheet) {
+            NavigationView {
+                Form {
+                    Section(header: Text("New User Agent")) {
+                        TextField("Name (e.g. My Browser)", text: $newName)
+                        TextField("User Agent String", text: $newValue)
+                    }
+                }
+                .navigationTitle("Add User Agent")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showAddSheet = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            if !newName.isEmpty && !newValue.isEmpty {
+                                DatabaseManager.shared.addCustomUserAgent(name: newName, value: newValue)
+                                loadData()
+                                showAddSheet = false
+                                newName = ""
+                                newValue = ""
+                            }
+                        }
+                        .disabled(newName.isEmpty || newValue.isEmpty)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func loadData() {
+        userAgents = DatabaseManager.shared.getAllUserAgents()
+        currentUserAgent = DatabaseManager.shared.getConfig(key: "user_agent") ?? ""
+    }
+    
+    private func deleteUserAgent(at offsets: IndexSet) {
+        offsets.forEach { index in
+            let item = userAgents[index]
+            if !item.isSystem {
+                DatabaseManager.shared.removeCustomUserAgent(name: item.name)
+            }
+        }
+        loadData()
     }
 }
