@@ -268,7 +268,7 @@ struct VideoCard: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
                         .padding(6)
-                } else if let latency = video.latency {
+                } else if let latency = video.latency, !video.url.isFileURL, !video.url.absoluteString.hasPrefix("localcache://") {
                     Text(latency < 0 ? "Timeout" : "\(Int(latency))ms")
                         .font(.caption2)
                         .fontWeight(.bold)

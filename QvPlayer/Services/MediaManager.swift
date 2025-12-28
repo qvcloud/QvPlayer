@@ -166,11 +166,12 @@ class MediaManager: ObservableObject {
         }
         
         // Calculate new sort order (lowest - 1 to append at end)
-        let videos = getVideos()
-        let minSortOrder = videos.map { $0.sortOrder }.min() ?? 0
-        let newSortOrder = minSortOrder - 1
+        // let videos = getVideos()
+        // let minSortOrder = videos.map { $0.sortOrder }.min() ?? 0
+        // let newSortOrder = minSortOrder - 1
+        let newSortOrder = 0
         
-        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: finalIsLive, sortOrder: newSortOrder)
+        let newVideo = Video(title: title, url: validURL, group: finalGroup, isLive: finalIsLive, sortOrder: newSortOrder, creationDate: Date())
         DatabaseManager.shared.addVideo(newVideo)
         
         notifyUpdate()
@@ -180,8 +181,8 @@ class MediaManager: ObservableObject {
         DebugLogger.shared.info("Appending playlist content")
         let newVideos = MediaService.shared.parseM3U(content: content)
         
-        let currentVideos = getVideos()
-        var minSortOrder = currentVideos.map { $0.sortOrder }.min() ?? 0
+        // let currentVideos = getVideos()
+        // var minSortOrder = currentVideos.map { $0.sortOrder }.min() ?? 0
         
         var videosToAdd = [Video]()
         
@@ -198,8 +199,10 @@ class MediaManager: ObservableObject {
                 v.group = "Imported"
             }
             
-            minSortOrder -= 1
-            v.sortOrder = minSortOrder
+            v.creationDate = Date()
+            
+            // minSortOrder -= 1
+            v.sortOrder = 0
             
             videosToAdd.append(v)
         }
@@ -246,6 +249,8 @@ class MediaManager: ObservableObject {
             if video.group == nil || video.group?.isEmpty == true {
                 video.group = "Imported"
             }
+            
+            video.creationDate = Date()
             
             videosToAdd.append(video)
         }

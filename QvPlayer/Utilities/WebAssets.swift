@@ -511,6 +511,12 @@ struct WebAssets {
                         <div class="status-title">NOW PLAYING</div>
                         <div class="status-value" id="nowPlayingText">-</div>
                         <div class="time-display" id="timeText">00:00</div>
+                        
+                        <div class="progress-container" id="progressContainer" onmousedown="startDrag(event)" style="width: 100%; height: 4px; background: #e5e5ea; border-radius: 2px; margin: 8px 0; position: relative; cursor: pointer;">
+                            <div id="progressBar" style="width: 0%; height: 100%; background: #007aff; border-radius: 2px;"></div>
+                            <div id="progressThumb" style="width: 12px; height: 12px; background: #007aff; border-radius: 50%; position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); pointer-events: none;"></div>
+                        </div>
+                        
                         <div id="statusText" style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);">Idle</div>
                         <div id="connectionInfo" style="font-size: 11px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; display: none;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
@@ -600,18 +606,6 @@ struct WebAssets {
                 </div>
                 
                 <div id="tab-upload" class="tab-content" style="display: none;">
-                    <div class="card">
-                        <h2>Add Live</h2>
-                        <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a live stream (M3U8, etc).</p>
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
-                            <input type="text" id="liveUrl" placeholder="http://example.com/live.m3u8" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                            <input type="text" id="liveName" placeholder="Channel Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                            <input type="text" id="liveGroup" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                        </div>
-                        <button onclick="addLive()" class="btn" id="addLiveBtn">Add Live Channel</button>
-                        <div id="liveStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
-                    </div>
-
                     <div class="card">
                         <h2>Add M3U Playlist URL</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to an M3U playlist to import multiple channels.</p>
@@ -860,7 +854,7 @@ struct WebAssets {
 
                 function control(action, time) {
                     let url = '/api/v1/control/' + action;
-                    if (time) url += '?time=' + time;
+                    if (time !== undefined && time !== null) url += '?time=' + time;
                     fetch(url, { method: 'POST' });
                     
                     // Optimistic UI update
@@ -1110,7 +1104,7 @@ struct WebAssets {
                     document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
                     document.getElementById('filter-' + filter).classList.add('active');
                     document.getElementById('selectAll').checked = false;
-                    renderMedia();
+                    loadMedia();
                 }
 
                 function updateGroupFilter() {
@@ -2038,11 +2032,56 @@ struct WebAssets {
                 }
                 
                 let lastLoopTime = 0;
+                let currentDuration = 0;
+                let isDragging = false;
+
+                function startDrag(event) {
+                    if (!currentDuration || currentDuration <= 0 || currentDuration === Infinity) return;
+                    isDragging = true;
+                    drag(event);
+                    document.addEventListener('mousemove', drag);
+                    document.addEventListener('mouseup', endDrag);
+                }
+
+                function drag(event) {
+                    if (!isDragging) return;
+                    const container = document.getElementById('progressContainer');
+                    const rect = container.getBoundingClientRect();
+                    let x = event.clientX - rect.left;
+                    let width = rect.width;
+                    let percent = Math.max(0, Math.min(1, x / width));
+                    
+                    updateProgressUI(percent * 100);
+                }
+
+                function endDrag(event) {
+                    if (!isDragging) return;
+                    isDragging = false;
+                    document.removeEventListener('mousemove', drag);
+                    document.removeEventListener('mouseup', endDrag);
+                    
+                    const container = document.getElementById('progressContainer');
+                    const rect = container.getBoundingClientRect();
+                    let x = event.clientX - rect.left;
+                    let width = rect.width;
+                    let percent = Math.max(0, Math.min(1, x / width));
+                    let seekTime = percent * currentDuration;
+                    
+                    control('seekTo', seekTime);
+                }
+                
+                function updateProgressUI(percent) {
+                    const bar = document.getElementById('progressBar');
+                    const thumb = document.getElementById('progressThumb');
+                    if(bar) bar.style.width = percent + '%';
+                    if(thumb) thumb.style.left = percent + '%';
+                }
 
                 function updateStatus() {
                     fetch('/api/v1/status')
                         .then(res => res.json())
                         .then(data => {
+                            currentDuration = data.duration;
                             document.getElementById('nowPlayingText').textContent = data.title || 'Not Playing';
                             document.getElementById('statusText').textContent = data.isPlaying ? 'Playing' : 'Paused';
                             
@@ -2054,6 +2093,17 @@ struct WebAssets {
                             };
                             document.getElementById('timeText').textContent = 
                                 `${formatTime(data.currentTime)} / ${formatTime(data.duration)}`;
+                                
+                            // Update Progress Bar
+                            if (!isDragging) {
+                                let percent = 0;
+                                if (data.duration > 0 && data.duration !== Infinity && !isNaN(data.duration)) {
+                                    percent = (data.currentTime / data.duration) * 100;
+                                    if (percent > 100) percent = 100;
+                                    if (percent < 0) percent = 0;
+                                }
+                                updateProgressUI(percent);
+                            }
                                 
                             // Update Connection Info
                             const connInfo = document.getElementById('connectionInfo');

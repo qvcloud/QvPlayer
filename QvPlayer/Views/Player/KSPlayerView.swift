@@ -204,6 +204,7 @@ struct KSPlayerView: UIViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handlePause), name: .commandPause, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleToggle), name: .commandToggle, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeek(_:)), name: .commandSeek, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleSeekTo(_:)), name: .commandSeekTo, object: nil)
         }
         
         @objc private func handlePlay() { 
@@ -238,6 +239,15 @@ struct KSPlayerView: UIViewRepresentable {
                 isUserPaused = false
                 let current = playerLayer?.player.currentPlaybackTime ?? 0
                 playerLayer?.seek(time: current + seconds, autoPlay: true, completion: { _ in 
+                    self.broadcastStatus()
+                })
+            }
+        }
+        
+        @objc private func handleSeekTo(_ notification: Notification) {
+            if let time = notification.userInfo?["time"] as? Double {
+                isUserPaused = false
+                playerLayer?.seek(time: time, autoPlay: true, completion: { _ in 
                     self.broadcastStatus()
                 })
             }

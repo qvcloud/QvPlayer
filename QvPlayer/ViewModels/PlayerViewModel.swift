@@ -98,6 +98,15 @@ class PlayerViewModel: ObservableObject {
                 }
             }
         })
+        
+        observers.append(center.addObserver(forName: .commandSeekTo, object: nil, queue: .main) { [weak self] notification in
+            Task { @MainActor in
+                guard let self = self, self.player != nil else { return }
+                if let time = notification.userInfo?["time"] as? Double {
+                    self.seek(to: time)
+                }
+            }
+        })
     }
     
     func load(video: Video) {
@@ -376,6 +385,12 @@ class PlayerViewModel: ObservableObject {
         guard let player = player else { return }
         let currentTime = player.currentTime()
         let newTime = CMTimeAdd(currentTime, CMTimeMakeWithSeconds(seconds, preferredTimescale: 600))
+        player.seek(to: newTime)
+    }
+    
+    func seek(to time: Double) {
+        guard let player = player else { return }
+        let newTime = CMTimeMakeWithSeconds(time, preferredTimescale: 600)
         player.seek(to: newTime)
     }
     

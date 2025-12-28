@@ -54,12 +54,22 @@ class HomeViewModel: ObservableObject {
         let liveVideos = videos.filter { $0.isLive }
         
         // Group Local
-        let localGrouped = Dictionary(grouping: localVideos) { $0.group ?? "Ungrouped" }
-        let localSortedKeys = localGrouped.keys.sorted {
-            if $0 == "Ungrouped" { return false }
-            if $1 == "Ungrouped" { return true }
-            return $0 < $1
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        let localGrouped = Dictionary(grouping: localVideos) { video -> String in
+            if let date = video.creationDate {
+                return dateFormatter.string(from: date)
+            }
+            return "Unknown Date"
         }
+        
+        let localSortedKeys = localGrouped.keys.sorted {
+            if $0 == "Unknown Date" { return false }
+            if $1 == "Unknown Date" { return true }
+            return $0 > $1 // Newest first
+        }
+        
         self.localVideoGroups = localSortedKeys.map { key in
             VideoGroup(name: key, videos: localGrouped[key] ?? [])
         }

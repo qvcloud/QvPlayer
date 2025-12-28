@@ -311,6 +311,11 @@ class WebAPIController {
                let seconds = Double(secondsStr) {
                 NotificationCenter.default.post(name: .commandSeek, object: nil, userInfo: ["seconds": seconds])
             }
+        case "seekTo":
+            if let timeStr = queryItems.first(where: { $0.name == "time" })?.value,
+               let time = Double(timeStr) {
+                NotificationCenter.default.post(name: .commandSeekTo, object: nil, userInfo: ["time": time])
+            }
         case "play_video":
             if let idStr = queryItems.first(where: { $0.name == "id" })?.value,
                let id = UUID(uuidString: idStr) {
