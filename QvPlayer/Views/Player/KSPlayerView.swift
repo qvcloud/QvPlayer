@@ -294,6 +294,7 @@ struct KSPlayerView: UIViewRepresentable {
             let status: [String: Any] = [
                 "isPlaying": player.isPlaying,
                 "title": playerLayer.url.lastPathComponent,
+                "tvgName": parent?.video.tvgName ?? "",
                 "id": parent?.video.id.uuidString ?? "",
                 "currentTime": currentTime.isNaN ? 0 : currentTime,
                 "duration": duration.isNaN ? 0 : duration,

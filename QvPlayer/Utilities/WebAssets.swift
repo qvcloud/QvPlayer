@@ -2206,7 +2206,11 @@ struct WebAssets {
                         .then(res => res.json())
                         .then(data => {
                             currentDuration = data.duration;
-                            document.getElementById('nowPlayingText').textContent = data.title || t('Not Playing');
+                            let displayTitle = data.title || t('Not Playing');
+                            if (data.tvgName) {
+                                displayTitle += ` (${data.tvgName})`;
+                            }
+                            document.getElementById('nowPlayingText').textContent = displayTitle;
                             document.getElementById('statusText').textContent = data.isPlaying ? t('Playing') : t('Paused');
                             
                             const formatTime = (s) => {

@@ -13,6 +13,9 @@ struct PlayerView: View {
     @State private var showTips = false
     @State private var autoHideTask: DispatchWorkItem?
     
+    @State private var showChannelInfo = false
+    @State private var channelInfoText = ""
+    
     enum FocusField {
         case rewind, playPause, fastForward, ksPlayer, systemPlayer, audioTrack, playbackSpeed
     }
@@ -28,6 +31,7 @@ struct PlayerView: View {
             
             tipsOverlay
             sourceListOverlay
+            channelInfoOverlay
         }
         .ignoresSafeArea()
         #if os(iOS)
@@ -53,6 +57,7 @@ struct PlayerView: View {
             if viewModel.currentVideo?.id != newVideo.id {
                 viewModel.currentVideo = newVideo
             }
+            showChannelInfoPopup(for: newVideo)
         }
         .onChange(of: showControls) { _, newValue in
             if newValue {
@@ -321,6 +326,28 @@ struct PlayerView: View {
     }
     
     @ViewBuilder
+    var channelInfoOverlay: some View {
+        if showChannelInfo {
+            VStack {
+                Text(channelInfoText)
+                    .font(.system(size: 40, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 40)
+                    .padding(.vertical, 20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.black.opacity(0.7))
+                            .shadow(radius: 10)
+                    )
+                    .padding(.top, 60)
+                Spacer()
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .zIndex(95)
+        }
+    }
+    
+    @ViewBuilder
     func sourceListItem(src: Video) -> some View {
         let isHighlighted = src.id == viewModel.highlightedVideo?.id
         let isPlaying = src.id == viewModel.currentVideo?.id
@@ -566,6 +593,22 @@ struct PlayerView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
             withAnimation {
                 self.showTips = false
+            }
+        }
+    }
+    
+    func showChannelInfoPopup(for video: Video) {
+        if let tvgName = video.tvgName, !tvgName.isEmpty {
+            channelInfoText = tvgName
+            withAnimation {
+                showChannelInfo = true
+            }
+            
+            // Auto-hide after 5 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                withAnimation {
+                    self.showChannelInfo = false
+                }
             }
         }
     }
