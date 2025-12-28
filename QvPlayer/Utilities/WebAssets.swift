@@ -29,7 +29,7 @@ struct WebAssets {
                 "Playing": "Playing",
                 "Paused": "Paused",
                 "Add Live": "Add Live",
-                "Add Group": "Add Group",
+                "Add Remote Resource": "Add Remote Resource",
                 "Batch Operation": "Batch Operation",
                 "Confirm": "Confirm",
                 "Input Group Name": "Input Group Name",
@@ -41,7 +41,11 @@ struct WebAssets {
                 "Click or Drag files here": "Click or Drag files here",
                 "Uploading...": "Uploading...",
                 "Completed": "Completed",
-                "Failed": "Failed"
+                "Failed": "Failed",
+                "Upload Speed": "Upload Speed",
+                "Progress": "Progress",
+                "Success!": "Success!",
+                "Error": "Error"
             ],
             "zh": [
                 "Playlist Queue": "播放队列",
@@ -69,7 +73,7 @@ struct WebAssets {
                 "Playing": "播放中",
                 "Paused": "已暂停",
                 "Add Live": "添加直播",
-                "Add Group": "添加分组",
+                "Add Remote Resource": "添加远程资源",
                 "Batch Operation": "批量操作",
                 "Confirm": "确认",
                 "Input Group Name": "输入分组名称",
@@ -81,7 +85,11 @@ struct WebAssets {
                 "Click or Drag files here": "点击或拖拽文件到此处",
                 "Uploading...": "上传中...",
                 "Completed": "已完成",
-                "Failed": "失败"
+                "Failed": "失败",
+                "Upload Speed": "上传速度",
+                "Progress": "进度",
+                "Success!": "成功！",
+                "Error": "错误"
             ]
         ]
         
@@ -291,6 +299,30 @@ struct WebAssets {
                     padding: 2px 6px;
                     border-radius: 10px;
                     margin-left: 8px;
+                }
+
+                /* Progress Bar */
+                .progress-container {
+                    width: 100%;
+                    background-color: #e5e5ea;
+                    border-radius: 8px;
+                    margin: 12px 0;
+                    overflow: hidden;
+                    display: none;
+                }
+                .progress-bar {
+                    width: 0%;
+                    height: 8px;
+                    background-color: var(--primary-color);
+                    transition: width 0.3s ease;
+                }
+                .upload-info {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 12px;
+                    color: var(--secondary-text);
+                    margin-top: 4px;
+                    display: none;
                 }
                 
                 .time-display {
@@ -742,7 +774,7 @@ struct WebAssets {
                     </div>
 
                     <div class="card">
-                        <h2 data-i18n="Add Group">Add Remote File</h2>
+                        <h2 data-i18n="Add Remote Resource">Add Remote File</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote video file (MP4, MKV, etc).</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
                             <input type="text" id="remoteFileUrl" placeholder="http://example.com/video.mp4" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
@@ -761,6 +793,15 @@ struct WebAssets {
                             <div id="fileName" style="margin-top: 12px; color: var(--secondary-text);"></div>
                         </div>
                         <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" data-i18n="Input Group Name" style="margin-bottom: 16px;">
+                        
+                        <div id="uploadProgressContainer" class="progress-container">
+                            <div id="uploadProgressBar" class="progress-bar"></div>
+                        </div>
+                        <div id="uploadInfo" class="upload-info">
+                            <div><span data-i18n="Upload Speed">Speed</span>: <span id="uploadSpeed">0 KB/s</span></div>
+                            <div><span data-i18n="Progress">Progress</span>: <span id="uploadPercent">0%</span></div>
+                        </div>
+
                         <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled data-i18n="Upload">Upload</button>
                         <div id="uploadStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
@@ -972,8 +1013,30 @@ struct WebAssets {
                 function switchTab(tabId) {
                     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
                     document.getElementById('tab-' + tabId).style.display = 'block';
-                    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-                    event.target.classList.add('active');
+                    document.querySelectorAll('.tab-btn').forEach(el => {
+                        el.classList.remove('active');
+                        if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(`'${tabId}'`)) {
+                            el.classList.add('active');
+                        }
+                    });
+                }
+
+                function refreshMediaAndSwitch() {
+                    // Reset filters to ensure new item is visible
+                    currentFilter = 'all';
+                    searchQuery = '';
+                    const searchInput = document.getElementById('searchInput');
+                    if (searchInput) searchInput.value = '';
+                    
+                    const groupFilter = document.getElementById('groupFilter');
+                    if (groupFilter) groupFilter.value = 'all';
+                    
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    const filterAllBtn = document.getElementById('filter-all');
+                    if (filterAllBtn) filterAllBtn.classList.add('active');
+                    
+                    switchTab('media');
+                    loadMedia();
                 }
 
                 function control(action, time) {
@@ -1037,33 +1100,78 @@ struct WebAssets {
                     
                     const statusDiv = document.getElementById('uploadStatus');
                     const btn = document.getElementById('uploadBtn');
+                    const progressContainer = document.getElementById('uploadProgressContainer');
+                    const progressBar = document.getElementById('uploadProgressBar');
+                    const uploadInfo = document.getElementById('uploadInfo');
+                    const speedSpan = document.getElementById('uploadSpeed');
+                    const percentSpan = document.getElementById('uploadPercent');
                     
-                    statusDiv.textContent = 'Uploading...';
+                    statusDiv.textContent = t('Uploading...');
                     btn.disabled = true;
-                    btn.textContent = 'Uploading...';
+                    btn.textContent = t('Uploading...');
                     
-                    fetch('/api/v1/upload', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        btn.disabled = false;
-                        btn.textContent = 'Upload & Play';
-                        if (data.success) {
-                            statusDiv.textContent = 'Success!';
-                            document.getElementById('fileInput').value = '';
-                            document.getElementById('fileName').textContent = '';
-                            switchTab('media');
-                            loadMedia();
-                        } else {
-                            statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
+                    progressContainer.style.display = 'block';
+                    uploadInfo.style.display = 'flex';
+                    progressBar.style.width = '0%';
+                    
+                    const xhr = new XMLHttpRequest();
+                    let startTime = Date.now();
+                    
+                    xhr.upload.addEventListener('progress', (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            progressBar.style.width = percent + '%';
+                            percentSpan.textContent = percent + '%';
+                            
+                            const duration = (Date.now() - startTime) / 1000;
+                            if (duration > 0) {
+                                const speed = e.loaded / duration; // bytes per second
+                                if (speed > 1024 * 1024) {
+                                    speedSpan.textContent = (speed / (1024 * 1024)).toFixed(2) + ' MB/s';
+                                } else {
+                                    speedSpan.textContent = (speed / 1024).toFixed(2) + ' KB/s';
+                                }
+                            }
                         }
-                    })
-                    .catch(err => {
-                        btn.disabled = false;
-                        statusDiv.textContent = 'Error: ' + err;
                     });
+                    
+                    xhr.onreadystatechange = () => {
+                        if (xhr.readyState === 4) {
+                            btn.disabled = false;
+                            btn.textContent = t('Upload');
+                            
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                try {
+                                    const data = JSON.parse(xhr.responseText);
+                                    if (data.success) {
+                                        statusDiv.textContent = t('Success!');
+                                        document.getElementById('fileInput').value = '';
+                                        document.getElementById('fileName').textContent = '';
+                                        
+                                        setTimeout(() => {
+                                            progressContainer.style.display = 'none';
+                                            uploadInfo.style.display = 'none';
+                                            refreshMediaAndSwitch();
+                                        }, 1000);
+                                    } else {
+                                        statusDiv.textContent = t('Error') + ': ' + (data.error || 'Unknown');
+                                    }
+                                } catch (e) {
+                                    statusDiv.textContent = t('Error') + ' parsing response';
+                                }
+                            } else {
+                                statusDiv.textContent = t('Error') + ': ' + xhr.statusText;
+                            }
+                        }
+                    };
+                    
+                    xhr.onerror = () => {
+                        btn.disabled = false;
+                        statusDiv.textContent = t('Error') + ': Network Error';
+                    };
+                    
+                    xhr.open('POST', '/api/v1/upload', true);
+                    xhr.send(formData);
                 }
 
                 function addLive() {
@@ -1101,12 +1209,11 @@ struct WebAssets {
                     .then(data => {
                         btn.disabled = false;
                         if (data.success) {
-                            statusDiv.textContent = 'Success!';
+                            statusDiv.textContent = t('Success!');
                             urlInput.value = '';
                             nameInput.value = '';
                             groupInput.value = '';
-                            switchTab('media');
-                            loadMedia();
+                            refreshMediaAndSwitch();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
@@ -1148,11 +1255,10 @@ struct WebAssets {
                     .then(data => {
                         btn.disabled = false;
                         if (data.success) {
-                            statusDiv.textContent = 'Success!';
+                            statusDiv.textContent = t('Success!');
                             urlInput.value = '';
                             groupInput.value = '';
-                            switchTab('media');
-                            loadMedia();
+                            refreshMediaAndSwitch();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
@@ -1198,12 +1304,11 @@ struct WebAssets {
                     .then(data => {
                         btn.disabled = false;
                         if (data.success) {
-                            statusDiv.textContent = 'Success!';
+                            statusDiv.textContent = t('Success!');
                             urlInput.value = '';
                             nameInput.value = '';
                             groupInput.value = '';
-                            switchTab('media');
-                            loadMedia();
+                            refreshMediaAndSwitch();
                         } else {
                             statusDiv.textContent = 'Error: ' + (data.error || 'Unknown');
                         }
