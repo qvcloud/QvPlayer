@@ -206,6 +206,7 @@ struct KSPlayerView: UIViewRepresentable {
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeek(_:)), name: .commandSeek, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSeekTo(_:)), name: .commandSeekTo, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(handleSelectAudioTrack(_:)), name: .commandSelectAudioTrack, object: nil)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleSetPlaybackRate(_:)), name: .commandSetPlaybackRate, object: nil)
         }
         
         @objc private func handlePlay() { 
@@ -264,6 +265,12 @@ struct KSPlayerView: UIViewRepresentable {
                         self.broadcastStatus()
                     }
                 }
+            }
+        }
+        
+        @objc private func handleSetPlaybackRate(_ notification: Notification) {
+            if let rate = notification.userInfo?["rate"] as? Float {
+                playerLayer?.player.playbackRate = rate
             }
         }
         

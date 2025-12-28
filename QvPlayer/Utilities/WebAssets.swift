@@ -1,6 +1,97 @@
 import Foundation
 
 struct WebAssets {
+    static var translationsJSON: String {
+        let dict: [String: [String: String]] = [
+            "en": [
+                "Playlist Queue": "Playlist Queue",
+                "Loop Playback": "Loop Playback",
+                "items": "items",
+                "NOW PLAYING": "NOW PLAYING",
+                "Idle": "Idle",
+                "Server": "Server",
+                "Status": "Status",
+                "Media": "Media",
+                "Groups": "Groups",
+                "Upload": "Upload",
+                "Settings": "Settings",
+                "Search...": "Search...",
+                "All": "All",
+                "Local": "Local",
+                "Live": "Live",
+                "Move Selected": "Move Selected",
+                "Delete Selected": "Delete Selected",
+                "Select All": "Select All",
+                "All Groups": "All Groups",
+                "Manage Groups": "Manage Groups",
+                "Clear Queue": "Clear Queue",
+                "Not Playing": "Not Playing",
+                "Playing": "Playing",
+                "Paused": "Paused",
+                "Add Live": "Add Live",
+                "Add Group": "Add Group",
+                "Batch Operation": "Batch Operation",
+                "Confirm": "Confirm",
+                "Input Group Name": "Input Group Name",
+                "New Group": "New Group",
+                "Rename": "Rename",
+                "Delete": "Delete",
+                "Are you sure?": "Are you sure?",
+                "Upload Files": "Upload Files",
+                "Click or Drag files here": "Click or Drag files here",
+                "Uploading...": "Uploading...",
+                "Completed": "Completed",
+                "Failed": "Failed"
+            ],
+            "zh": [
+                "Playlist Queue": "播放队列",
+                "Loop Playback": "循环播放",
+                "items": "个项目",
+                "NOW PLAYING": "正在播放",
+                "Idle": "空闲",
+                "Server": "服务器",
+                "Status": "状态",
+                "Media": "媒体库",
+                "Groups": "分组",
+                "Upload": "上传",
+                "Settings": "设置",
+                "Search...": "搜索...",
+                "All": "全部",
+                "Local": "本地",
+                "Live": "直播",
+                "Move Selected": "移动选中",
+                "Delete Selected": "删除选中",
+                "Select All": "全选",
+                "All Groups": "所有分组",
+                "Manage Groups": "管理分组",
+                "Clear Queue": "清空队列",
+                "Not Playing": "未播放",
+                "Playing": "播放中",
+                "Paused": "已暂停",
+                "Add Live": "添加直播",
+                "Add Group": "添加分组",
+                "Batch Operation": "批量操作",
+                "Confirm": "确认",
+                "Input Group Name": "输入分组名称",
+                "New Group": "新分组",
+                "Rename": "重命名",
+                "Delete": "删除",
+                "Are you sure?": "确定吗？",
+                "Upload Files": "上传文件",
+                "Click or Drag files here": "点击或拖拽文件到此处",
+                "Uploading...": "上传中...",
+                "Completed": "已完成",
+                "Failed": "失败"
+            ]
+        ]
+        
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: []),
+           let json = String(data: data, encoding: .utf8) {
+            return json
+        }
+        return "{}"
+    }
+
     static var htmlContent: String {
         return """
         <!DOCTYPE html>
@@ -476,6 +567,39 @@ struct WebAssets {
                     font-family: monospace;
                 }
             </style>
+            <script>
+                const translations = \(translationsJSON);
+                const userLang = navigator.language || navigator.userLanguage; 
+                const lang = userLang.startsWith('zh') ? 'zh' : 'en';
+
+                function t(key) {
+                    if (translations[lang] && translations[lang][key]) {
+                        return translations[lang][key];
+                    }
+                    return key;
+                }
+
+                function localize() {
+                    document.querySelectorAll('[data-i18n]').forEach(el => {
+                        const key = el.getAttribute('data-i18n');
+                        if (key) {
+                            if (el.tagName === 'INPUT' && el.getAttribute('placeholder')) {
+                                el.placeholder = t(key);
+                            } else {
+                                // Preserve child elements if any (like icons), but usually we just replace text
+                                // For buttons with icons, we might need a span
+                                if (el.children.length > 0 && !el.classList.contains('filter-btn')) {
+                                     // Special handling if needed, or just use span for text
+                                } else {
+                                     el.textContent = t(key);
+                                }
+                            }
+                        }
+                    });
+                }
+                
+                window.addEventListener('DOMContentLoaded', localize);
+            </script>
         </head>
         <body>
             <div class="container">
@@ -483,7 +607,7 @@ struct WebAssets {
                 <div class="sidebar">
                     <div class="sidebar-header">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                            <h2 style="margin: 0;">Playlist Queue</h2>
+                            <h2 style="margin: 0;" data-i18n="Playlist Queue">Playlist Queue</h2>
                             <button class="icon-btn danger" onclick="clearQueue()" title="Clear Queue" style="padding: 6px;">
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -492,7 +616,7 @@ struct WebAssets {
                         </div>
                         <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--secondary-text);">
                             <label style="display: flex; align-items: center; cursor: pointer; color: var(--text-color);">
-                                <input type="checkbox" id="loopMedia" onchange="toggleLoop(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> Loop Playback
+                                <input type="checkbox" id="loopMedia" onchange="toggleLoop(this)" style="margin-right: 8px; width: auto; margin-bottom: 0;"> <span data-i18n="Loop Playback">Loop Playback</span>
                             </label>
                             <span id="mediaCount">0 items</span>
                         </div>
@@ -508,7 +632,7 @@ struct WebAssets {
                 <div class="main-content">
                     <div class="card">
                         <div class="status-display">
-                        <div class="status-title">NOW PLAYING</div>
+                        <div class="status-title" data-i18n="NOW PLAYING">NOW PLAYING</div>
                         <div class="status-value" id="nowPlayingText">-</div>
                         <div class="time-display" id="timeText">00:00</div>
                         
@@ -517,14 +641,14 @@ struct WebAssets {
                             <div id="progressThumb" style="width: 12px; height: 12px; background: #007aff; border-radius: 50%; position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); pointer-events: none;"></div>
                         </div>
                         
-                        <div id="statusText" style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);">Idle</div>
+                        <div id="statusText" style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);" data-i18n="Idle">Idle</div>
                         <div id="connectionInfo" style="font-size: 11px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e5ea; display: none;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
-                                <span style="color: var(--secondary-text);">Server:</span>
+                                <span style="color: var(--secondary-text);" data-i18n="Server">Server:</span>
                                 <span id="serverAddress" style="font-family: monospace;">-</span>
                             </div>
                             <div style="display: flex; justify-content: space-between;">
-                                <span style="color: var(--secondary-text);">Status:</span>
+                                <span style="color: var(--secondary-text);" data-i18n="Status">Status:</span>
                                 <span id="onlineStatus">-</span>
                             </div>
                         </div>
@@ -552,26 +676,26 @@ struct WebAssets {
                 </div>
                 
                 <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('media')">Media</button>
-                    <button class="tab-btn" onclick="switchTab('groups')">Groups</button>
-                    <button class="tab-btn" onclick="switchTab('upload')">Upload</button>
-                    <button class="tab-btn" onclick="switchTab('settings')">Settings</button>
+                    <button class="tab-btn active" onclick="switchTab('media')" data-i18n="Media">Media</button>
+                    <button class="tab-btn" onclick="switchTab('groups')" data-i18n="Groups">Groups</button>
+                    <button class="tab-btn" onclick="switchTab('upload')" data-i18n="Upload">Upload</button>
+                    <button class="tab-btn" onclick="switchTab('settings')" data-i18n="Settings">Settings</button>
                 </div>
                 
                 <div id="tab-media" class="tab-content">
                     <div class="card">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div class="filter-group" style="align-items: center;">
-                                <input type="text" id="searchInput" placeholder="Search..." oninput="handleSearch(this.value)" style="border: none; background: transparent; padding: 6px 12px; font-size: 13px; width: 150px; outline: none; margin-bottom: 0;">
+                                <input type="text" id="searchInput" placeholder="Search..." data-i18n="Search..." oninput="handleSearch(this.value)" style="border: none; background: transparent; padding: 6px 12px; font-size: 13px; width: 150px; outline: none; margin-bottom: 0;">
                                 <div style="width: 1px; height: 20px; background: #d2d2d7; margin: 0 4px;"></div>
-                                <button class="filter-btn active" id="filter-all" onclick="setFilter('all')">All</button>
-                                <button class="filter-btn" id="filter-local" onclick="setFilter('local')">Local</button>
-                                <button class="filter-btn" id="filter-live" onclick="setFilter('live')">Live</button>
+                                <button class="filter-btn active" id="filter-all" onclick="setFilter('all')" data-i18n="All">All</button>
+                                <button class="filter-btn" id="filter-local" onclick="setFilter('local')" data-i18n="Local">Local</button>
+                                <button class="filter-btn" id="filter-live" onclick="setFilter('live')" data-i18n="Live">Live</button>
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <div id="batchToolbar" style="display: none; gap: 8px;">
-                                    <button class="btn secondary" onclick="openBatchMoveModal()">Move Selected</button>
-                                    <button class="btn danger" onclick="batchDelete()">Delete Selected</button>
+                                    <button class="btn secondary" onclick="openBatchMoveModal()" data-i18n="Move Selected">Move Selected</button>
+                                    <button class="btn danger" onclick="batchDelete()" data-i18n="Delete Selected">Delete Selected</button>
                                 </div>
                                 <button class="icon-btn" onclick="loadMedia()">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -583,9 +707,9 @@ struct WebAssets {
                         </div>
                         <div style="padding: 8px 16px; border-bottom: 1px solid #e5e5ea; display: flex; align-items: center;">
                             <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="margin-right: 12px;">
-                            <label for="selectAll" style="font-size: 14px; color: var(--secondary-text); margin-right: 16px;">Select All</label>
+                            <label for="selectAll" style="font-size: 14px; color: var(--secondary-text); margin-right: 16px;" data-i18n="Select All">Select All</label>
                             <select id="groupFilter" onchange="renderMedia()" style="padding: 4px 8px; border-radius: 6px; border: 1px solid #d2d2d7; background: white; font-size: 13px; color: var(--text-color); cursor: pointer;">
-                                <option value="all">All Groups</option>
+                                <option value="all" data-i18n="All Groups">All Groups</option>
                             </select>
                         </div>
                         <ul id="mediaList" class="video-list">
@@ -597,7 +721,7 @@ struct WebAssets {
                 
                 <div id="tab-groups" class="tab-content" style="display: none;">
                     <div class="card">
-                        <h2>Manage Groups</h2>
+                        <h2 data-i18n="Manage Groups">Manage Groups</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 16px;">Deleting a group will remove all videos and cache within it.</p>
                         <ul id="groupList" class="video-list">
                             <!-- Groups loaded via JS -->
@@ -607,44 +731,44 @@ struct WebAssets {
                 
                 <div id="tab-upload" class="tab-content" style="display: none;">
                     <div class="card">
-                        <h2>Add M3U Playlist URL</h2>
+                        <h2 data-i18n="Add Live">Add M3U Playlist URL</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to an M3U playlist to import multiple channels.</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
                             <input type="text" id="m3uUrl" placeholder="http://example.com/playlist.m3u" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                            <input type="text" id="m3uGroupName" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="m3uGroupName" placeholder="Group Name (Optional)" data-i18n="Input Group Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
                         </div>
-                        <button onclick="addM3U()" class="btn" id="addM3UBtn">Import M3U Playlist</button>
+                        <button onclick="addM3U()" class="btn" id="addM3UBtn" data-i18n="Confirm">Import M3U Playlist</button>
                         <div id="m3uStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
 
                     <div class="card">
-                        <h2>Add Remote File</h2>
+                        <h2 data-i18n="Add Group">Add Remote File</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Enter a URL to a remote video file (MP4, MKV, etc).</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
                             <input type="text" id="remoteFileUrl" placeholder="http://example.com/video.mp4" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
                             <input type="text" id="remoteFileName" placeholder="Video Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
-                            <input type="text" id="remoteFileGroup" placeholder="Group Name (Optional)" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
+                            <input type="text" id="remoteFileGroup" placeholder="Group Name (Optional)" data-i18n="Input Group Name" style="padding: 10px; border-radius: 8px; border: 1px solid #d2d2d7;">
                         </div>
-                        <button onclick="addRemoteFile()" class="btn" id="addRemoteFileBtn">Add Remote File</button>
+                        <button onclick="addRemoteFile()" class="btn" id="addRemoteFileBtn" data-i18n="Confirm">Add Remote File</button>
                         <div id="remoteFileStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
 
                     <div class="card">
-                        <h2>Upload Local File</h2>
+                        <h2 data-i18n="Upload Files">Upload Local File</h2>
                         <div style="border: 2px dashed #d2d2d7; border-radius: 12px; padding: 40px; text-align: center; margin-bottom: 16px;">
                             <input type="file" id="fileInput" style="display: none" multiple onchange="handleFileSelect()">
-                            <button class="btn secondary" onclick="document.getElementById('fileInput').click()">Select Video Files</button>
+                            <button class="btn secondary" onclick="document.getElementById('fileInput').click()" data-i18n="Click or Drag files here">Select Video Files</button>
                             <div id="fileName" style="margin-top: 12px; color: var(--secondary-text);"></div>
                         </div>
-                        <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" style="margin-bottom: 16px;">
-                        <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled>Upload</button>
+                        <input type="text" id="uploadGroup" placeholder="Group Name (Optional)" data-i18n="Input Group Name" style="margin-bottom: 16px;">
+                        <button onclick="uploadFile()" class="btn" id="uploadBtn" disabled data-i18n="Upload">Upload</button>
                         <div id="uploadStatus" style="margin-top: 12px; text-align: center; font-size: 14px;"></div>
                     </div>
                 </div>
 
                 <div id="tab-settings" class="tab-content" style="display: none;">
                     <div class="card">
-                        <h2>Player Configuration</h2>
+                        <h2 data-i18n="Settings">Player Configuration</h2>
                         <p style="color: var(--secondary-text); font-size: 14px; margin-bottom: 12px;">Configure global player settings.</p>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
                             <label style="font-size: 14px; font-weight: 500;">User-Agent</label>
@@ -811,7 +935,7 @@ struct WebAssets {
 
                 function deleteQueueItem(id, event) {
                     if (event) event.stopPropagation();
-                    if (!confirm('Remove this item from queue?')) return;
+                    if (!confirm(t('Are you sure?'))) return;
                     
                     fetch('/api/v1/queue?id=' + id, {
                         method: 'DELETE'
@@ -826,7 +950,7 @@ struct WebAssets {
                 }
 
                 function clearQueue() {
-                    if (!confirm('Are you sure you want to clear the playlist queue?')) return;
+                    if (!confirm(t('Are you sure?'))) return;
                     
                     fetch('/api/v1/queue', {
                         method: 'DELETE'
@@ -1269,7 +1393,7 @@ struct WebAssets {
                     const name = select.value;
                     if (!name) return;
                     
-                    if (!confirm('Delete custom User-Agent "' + name + '"?')) return;
+                    if (!confirm(t('Are you sure?'))) return;
                     
                     fetch('/api/v1/config', {
                         method: 'PUT',
@@ -1453,7 +1577,7 @@ struct WebAssets {
                 }
                 
                 function deleteGroup(group) {
-                    if (!confirm(`Are you sure you want to delete group "${group}" and all its videos? This cannot be undone.`)) return;
+                    if (!confirm(t('Are you sure?'))) return;
                     
                     fetch('/api/v1/groups', {
                         method: 'DELETE',
@@ -1886,7 +2010,7 @@ struct WebAssets {
                 }
                 
                 function batchDelete() {
-                    if (!confirm(`Delete ${selectedIndices.size} selected items?`)) return;
+                    if (!confirm(t('Are you sure?'))) return;
                     
                     fetch('/api/v1/videos/batch', {
                         method: 'DELETE',
@@ -1961,7 +2085,7 @@ struct WebAssets {
                 }
                 
                 function deleteVideo(index) {
-                    if(confirm('Delete this stream?')) {
+                    if(confirm(t('Are you sure?'))) {
                         fetch('/api/v1/videos?index=' + index, { method: 'DELETE' })
                             .then(() => loadMedia());
                     }
@@ -2082,14 +2206,19 @@ struct WebAssets {
                         .then(res => res.json())
                         .then(data => {
                             currentDuration = data.duration;
-                            document.getElementById('nowPlayingText').textContent = data.title || 'Not Playing';
-                            document.getElementById('statusText').textContent = data.isPlaying ? 'Playing' : 'Paused';
+                            document.getElementById('nowPlayingText').textContent = data.title || t('Not Playing');
+                            document.getElementById('statusText').textContent = data.isPlaying ? t('Playing') : t('Paused');
                             
                             const formatTime = (s) => {
                                 if (!s) return '00:00';
-                                const m = Math.floor(s / 60);
+                                const h = Math.floor(s / 3600);
+                                const m = Math.floor((s % 3600) / 60);
                                 const sec = Math.floor(s % 60);
-                                return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                                if (h > 0) {
+                                    return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                                } else {
+                                    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                                }
                             };
                             document.getElementById('timeText').textContent = 
                                 `${formatTime(data.currentTime)} / ${formatTime(data.duration)}`;
@@ -2131,7 +2260,7 @@ struct WebAssets {
                             // Update Queue from Status
                             if (data.queue) {
                                 currentQueue = data.queue;
-                                document.getElementById('mediaCount').textContent = currentQueue.length + ' items';
+                                document.getElementById('mediaCount').textContent = currentQueue.length + ' ' + t('items');
                                 renderSidebar();
                             }
                             

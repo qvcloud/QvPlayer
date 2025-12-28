@@ -14,7 +14,7 @@ struct PlayerView: View {
     @State private var autoHideTask: DispatchWorkItem?
     
     enum FocusField {
-        case rewind, playPause, fastForward, ksPlayer, systemPlayer
+        case rewind, playPause, fastForward, ksPlayer, systemPlayer, audioTrack, playbackSpeed
     }
     @FocusState private var focusedField: FocusField?
     
@@ -62,7 +62,7 @@ struct PlayerView: View {
             }
         }
         .onChange(of: focusedField) { _, newValue in
-            if newValue == .rewind || newValue == .playPause || newValue == .fastForward {
+            if newValue == .rewind || newValue == .playPause || newValue == .fastForward || newValue == .audioTrack || newValue == .playbackSpeed {
                 resetAutoHideTimer()
             }
         }
@@ -380,8 +380,14 @@ struct PlayerView: View {
                     Image(systemName: "gobackward.10")
                         .font(.system(size: 40))
                         .padding()
+                        .background(
+                            Circle()
+                                .fill(focusedField == .rewind ? Color.white.opacity(0.3) : Color.clear)
+                        )
+                        .scaleEffect(focusedField == .rewind ? 1.2 : 1.0)
+                        .animation(.spring(), value: focusedField)
                 }
-                .buttonStyle(.card)
+                .buttonStyle(.plain)
                 .focused($focusedField, equals: .rewind)
             }
 
@@ -389,8 +395,14 @@ struct PlayerView: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 40))
                     .padding()
+                    .background(
+                        Circle()
+                            .fill(focusedField == .playPause ? Color.white.opacity(0.3) : Color.clear)
+                    )
+                    .scaleEffect(focusedField == .playPause ? 1.2 : 1.0)
+                    .animation(.spring(), value: focusedField)
             }
-            .buttonStyle(.card)
+            .buttonStyle(.plain)
             .focused($focusedField, equals: .playPause)
             
             if !video.isLive {
@@ -398,8 +410,14 @@ struct PlayerView: View {
                     Image(systemName: "goforward.10")
                         .font(.system(size: 40))
                         .padding()
+                        .background(
+                            Circle()
+                                .fill(focusedField == .fastForward ? Color.white.opacity(0.3) : Color.clear)
+                        )
+                        .scaleEffect(focusedField == .fastForward ? 1.2 : 1.0)
+                        .animation(.spring(), value: focusedField)
                 }
-                .buttonStyle(.card)
+                .buttonStyle(.plain)
                 .focused($focusedField, equals: .fastForward)
             }
             
@@ -422,13 +440,48 @@ struct PlayerView: View {
                     Image(systemName: "waveform")
                         .font(.system(size: 30))
                         .padding()
+                        .background(
+                            Circle()
+                                .fill(focusedField == .audioTrack ? Color.white.opacity(0.3) : Color.clear)
+                        )
+                        .scaleEffect(focusedField == .audioTrack ? 1.2 : 1.0)
+                        .animation(.spring(), value: focusedField)
                 }
-                .buttonStyle(.card)
+                .buttonStyle(.plain)
+                .focused($focusedField, equals: .audioTrack)
             }
+            
+            // Playback Speed
+            Menu {
+                ForEach([0.5, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
+                    Button(action: {
+                        NotificationCenter.default.post(name: .commandSetPlaybackRate, object: nil, userInfo: ["rate": Float(rate)])
+                    }) {
+                        HStack {
+                            Text("\(String(format: "%.2fx", rate))")
+                            if Float(rate) == viewModel.playbackRate {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Image(systemName: "gauge")
+                    .font(.system(size: 30))
+                    .padding()
+                    .background(
+                        Circle()
+                            .fill(focusedField == .playbackSpeed ? Color.white.opacity(0.3) : Color.clear)
+                    )
+                    .scaleEffect(focusedField == .playbackSpeed ? 1.2 : 1.0)
+                    .animation(.spring(), value: focusedField)
+            }
+            .buttonStyle(.plain)
+            .focused($focusedField, equals: .playbackSpeed)
         }
         .padding(.bottom, 60)
-        .opacity(showControls || (focusedField != nil && focusedField != .ksPlayer) ? 1 : 0)
-        .animation(.easeInOut, value: showControls || (focusedField != nil && focusedField != .ksPlayer))
+        .opacity(showControls || (focusedField != nil && focusedField != .ksPlayer && focusedField != .systemPlayer) ? 1 : 0)
+        .animation(.easeInOut, value: showControls || (focusedField != nil && focusedField != .ksPlayer && focusedField != .systemPlayer))
     }
     
     // MARK: - Helpers
@@ -451,6 +504,11 @@ struct PlayerView: View {
             default:
                 break
             }
+        }
+        
+        // When controls are visible, disable seek/channel switch to allow UI navigation
+        if showControls {
+            return
         }
         
         switch direction {
@@ -493,7 +551,7 @@ struct PlayerView: View {
             if engine == "ksplayer" {
                 focusedField = .ksPlayer
             } else {
-                focusedField = nil
+                focusedField = .systemPlayer
             }
         }
     }
@@ -520,7 +578,7 @@ struct PlayerView: View {
                 if playerEngine == "ksplayer" {
                     focusedField = .ksPlayer
                 } else {
-                    focusedField = nil
+                    focusedField = .systemPlayer
                 }
             }
         }

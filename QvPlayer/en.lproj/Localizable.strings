@@ -92,3 +92,37 @@
 "15 Days" = "15 Days";
 "30 Days" = "30 Days";
 
+/* Web Console */
+"Playlist Queue" = "Playlist Queue";
+"Loop Playback" = "Loop Playback";
+"items" = "items";
+"NOW PLAYING" = "NOW PLAYING";
+"Idle" = "Idle";
+"Media" = "Media";
+"Groups" = "Groups";
+"Upload" = "Upload";
+"Search..." = "Search...";
+"All" = "All";
+"Move Selected" = "Move Selected";
+"Delete Selected" = "Delete Selected";
+"Select All" = "Select All";
+"All Groups" = "All Groups";
+"Manage Groups" = "Manage Groups";
+"Clear Queue" = "Clear Queue";
+"Not Playing" = "Not Playing";
+"Playing" = "Playing";
+"Paused" = "Paused";
+"Add Live" = "Add Live";
+"Add Group" = "Add Group";
+"Batch Operation" = "Batch Operation";
+"Confirm" = "Confirm";
+"Input Group Name" = "Input Group Name";
+"New Group" = "New Group";
+"Rename" = "Rename";
+"Are you sure?" = "Are you sure?";
+"Upload Files" = "Upload Files";
+"Click or Drag files here" = "Click or Drag files here";
+"Uploading..." = "Uploading...";
+"Completed" = "Completed";
+"Failed" = "Failed";
+

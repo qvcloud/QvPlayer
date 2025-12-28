@@ -14,6 +14,7 @@ class PlayerViewModel: ObservableObject {
     @Published var isBuffering: Bool = false
     @Published var currentVideo: Video?
     @Published var errorMessage: String?
+    @Published var playbackRate: Float = 1.0
     
     // Audio Tracks
     @Published var audioTracks: [String] = []
@@ -99,6 +100,15 @@ class PlayerViewModel: ObservableObject {
                 guard let self = self, self.player != nil else { return }
                 if let seconds = notification.userInfo?["seconds"] as? Double {
                     self.seek(by: seconds)
+                }
+            }
+        })
+        
+        observers.append(center.addObserver(forName: .commandSetPlaybackRate, object: nil, queue: .main) { [weak self] notification in
+            Task { @MainActor in
+                guard let self = self else { return }
+                if let rate = notification.userInfo?["rate"] as? Float {
+                    self.setPlaybackRate(rate)
                 }
             }
         })
@@ -385,8 +395,16 @@ class PlayerViewModel: ObservableObject {
         let engine = UserDefaults.standard.string(forKey: "playerEngine") ?? "system"
         if engine == "ksplayer" { return }
         
-        player?.play()
+        player?.rate = playbackRate
         isPlaying = true
+    }
+    
+    func setPlaybackRate(_ rate: Float) {
+        print("⏩ [PlayerViewModel] Setting playback rate: \(rate)")
+        self.playbackRate = rate
+        if isPlaying {
+            player?.rate = rate
+        }
     }
     
     func pause() {

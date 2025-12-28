@@ -92,3 +92,37 @@
 "15 Days" = "15 天";
 "30 Days" = "30 天";
 
+/* Web Console */
+"Playlist Queue" = "播放队列";
+"Loop Playback" = "循环播放";
+"items" = "个项目";
+"NOW PLAYING" = "正在播放";
+"Idle" = "空闲";
+"Media" = "媒体库";
+"Groups" = "分组";
+"Upload" = "上传";
+"Search..." = "搜索...";
+"All" = "全部";
+"Move Selected" = "移动选中";
+"Delete Selected" = "删除选中";
+"Select All" = "全选";
+"All Groups" = "所有分组";
+"Manage Groups" = "管理分组";
+"Clear Queue" = "清空队列";
+"Not Playing" = "未播放";
+"Playing" = "播放中";
+"Paused" = "已暂停";
+"Add Live" = "添加直播";
+"Add Group" = "添加分组";
+"Batch Operation" = "批量操作";
+"Confirm" = "确认";
+"Input Group Name" = "输入分组名称";
+"New Group" = "新分组";
+"Rename" = "重命名";
+"Are you sure?" = "确定吗？";
+"Upload Files" = "上传文件";
+"Click or Drag files here" = "点击或拖拽文件到此处";
+"Uploading..." = "上传中...";
+"Completed" = "已完成";
+"Failed" = "失败";
+
