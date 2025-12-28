@@ -1,0 +1,26 @@
+# Xcode
+#
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.xcuserstate
+xcuserdata/
+project.xcworkspace/xcuserdata/
+project.xcworkspace/xcshareddata/swiftpm/configuration/control
+project.xcworkspace/xcshareddata/swiftpm/package.resolved
+*.xcuserdata
+
+# Swift Package Manager
+#
+.build/
+Packages/
+Package.resolved
+.swiftpm/xcode/package.resolved
+.swiftpm/xcode/xcuserdata/
+
+# macOS
+#
+.DS_Store
+*.swp
+*.lock
