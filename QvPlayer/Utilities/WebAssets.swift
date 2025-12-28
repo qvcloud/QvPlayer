@@ -668,9 +668,11 @@ struct WebAssets {
                         <div class="status-value" id="nowPlayingText">-</div>
                         <div class="time-display" id="timeText">00:00</div>
                         
-                        <div class="progress-container" id="progressContainer" onmousedown="startDrag(event)" style="width: 100%; height: 4px; background: #e5e5ea; border-radius: 2px; margin: 8px 0; position: relative; cursor: pointer;">
-                            <div id="progressBar" style="width: 0%; height: 100%; background: #007aff; border-radius: 2px;"></div>
-                            <div id="progressThumb" style="width: 12px; height: 12px; background: #007aff; border-radius: 50%; position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); pointer-events: none;"></div>
+                        <div id="progressContainer" onmousedown="startDrag(event)" ontouchstart="startDrag(event)" style="width: 100%; height: 24px; display: flex; align-items: center; cursor: pointer; position: relative; margin: 4px 0; -webkit-tap-highlight-color: transparent;">
+                            <div style="width: 100%; height: 4px; background: #e5e5ea; border-radius: 2px; position: relative; pointer-events: none;">
+                                <div id="progressBar" style="width: 0%; height: 100%; background: #007aff; border-radius: 2px;"></div>
+                                <div id="progressThumb" style="width: 14px; height: 14px; background: #007aff; border-radius: 50%; position: absolute; top: 50%; left: 0%; transform: translate(-50%, -50%); box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none;"></div>
+                            </div>
                         </div>
                         
                         <div id="statusText" style="font-size: 12px; margin-top: 4px; color: var(--secondary-text);" data-i18n="Idle">Idle</div>
@@ -2264,34 +2266,55 @@ struct WebAssets {
                 let currentDuration = 0;
                 let isDragging = false;
 
+                function getEventX(event) {
+                    if (event.touches && event.touches.length > 0) {
+                        return event.touches[0].clientX;
+                    } else if (event.changedTouches && event.changedTouches.length > 0) {
+                        return event.changedTouches[0].clientX;
+                    }
+                    return event.clientX;
+                }
+
                 function startDrag(event) {
                     if (!currentDuration || currentDuration <= 0 || currentDuration === Infinity) return;
                     isDragging = true;
                     drag(event);
-                    document.addEventListener('mousemove', drag);
-                    document.addEventListener('mouseup', endDrag);
+                    
+                    if (event.type === 'touchstart') {
+                        document.addEventListener('touchmove', drag, { passive: false });
+                        document.addEventListener('touchend', endDrag);
+                    } else {
+                        document.addEventListener('mousemove', drag);
+                        document.addEventListener('mouseup', endDrag);
+                    }
+                    
+                    if (event.cancelable) event.preventDefault();
                 }
 
                 function drag(event) {
                     if (!isDragging) return;
                     const container = document.getElementById('progressContainer');
                     const rect = container.getBoundingClientRect();
-                    let x = event.clientX - rect.left;
+                    let x = getEventX(event) - rect.left;
                     let width = rect.width;
                     let percent = Math.max(0, Math.min(1, x / width));
                     
                     updateProgressUI(percent * 100);
+                    if (event.cancelable) event.preventDefault();
                 }
 
                 function endDrag(event) {
                     if (!isDragging) return;
                     isDragging = false;
+                    
                     document.removeEventListener('mousemove', drag);
                     document.removeEventListener('mouseup', endDrag);
+                    document.removeEventListener('touchmove', drag);
+                    document.removeEventListener('touchend', endDrag);
                     
                     const container = document.getElementById('progressContainer');
                     const rect = container.getBoundingClientRect();
-                    let x = event.clientX - rect.left;
+                    let x = getEventX(event) - rect.left;
                     let width = rect.width;
                     let percent = Math.max(0, Math.min(1, x / width));
                     let seekTime = percent * currentDuration;
