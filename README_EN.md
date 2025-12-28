@@ -94,9 +94,11 @@ If you encounter a video with sound but no image (black screen):
 
 ## 📸 Screenshots
 
-| Home | Player |
+For more screenshots, please check the [Screenshot/](Screenshot/) directory.
+
+| Player | Live |
 |:---:|:---:|
-| <img src="Screenshot/player-home.png" width="400"/> | <img src="Screenshot/player.png" width="400"/> |
+| <img src="Screenshot/player.png" width="400"/> | <img src="Screenshot/live.png" width="400"/> |
 
 ## 📝 License
 

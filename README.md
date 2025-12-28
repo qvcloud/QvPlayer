@@ -99,9 +99,11 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 
 ## 📸 截图展示
 
-| 主页 | 播放器 |
+更多截图请查看 [Screenshot/](Screenshot/) 目录。
+
+| 播放器 | 直播 |
 |:---:|:---:|
-| <img src="Screenshot/player-home.png" width="400"/> | <img src="Screenshot/player.png" width="400"/> |
+| <img src="Screenshot/player.png" width="400"/> | <img src="Screenshot/live.png" width="400"/> |
 
 ## 📝 许可证
 
