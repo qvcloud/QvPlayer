@@ -47,6 +47,23 @@ struct AboutView: View {
                 }
             }
             
+            VStack(spacing: 12) {
+                HStack {
+                    Text(NSLocalizedString("Privacy Policy:", comment: ""))
+                        .foregroundColor(.secondary)
+                    Text("https://qvcloud.github.io/QvPlayer/privacy.html")
+                        .foregroundColor(.blue)
+                }
+                
+                HStack {
+                    Text(NSLocalizedString("Support:", comment: ""))
+                        .foregroundColor(.secondary)
+                    Text("https://qvcloud.github.io/QvPlayer/support.html")
+                        .foregroundColor(.blue)
+                }
+            }
+            .font(.caption)
+            
             Spacer()
                 .frame(height: 50)
             

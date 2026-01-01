@@ -98,6 +98,10 @@
 "items" = "items";
 "NOW PLAYING" = "NOW PLAYING";
 "Idle" = "Idle";
+
+/* About View */
+"Privacy Policy:" = "Privacy Policy:";
+"Support:" = "Support:";
 "Media" = "Media";
 "Groups" = "Groups";
 "Upload" = "Upload";

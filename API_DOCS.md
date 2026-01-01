@@ -2,7 +2,7 @@
 
 QvPlayer 提供了一个内置的 HTTP 服务器，允许你远程控制播放器和管理播放列表。
 
-**基础 URL**: `http://<Apple-TV-IP>:10001`
+**基础 URL**: `http://<Apple-TV-IP>:12345`
 
 ## 📺 播放列表管理
 

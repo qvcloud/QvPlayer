@@ -152,9 +152,11 @@ struct SettingsView: View {
                 }
             }
             
+            #if DEBUG
             Section(header: Text("Debug")) {
                 Toggle("Show Debug Overlay", isOn: $showDebugOverlay)
             }
+            #endif
             
             Section(header: Text("About")) {
                 NavigationLink(destination: AboutView()) {

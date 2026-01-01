@@ -1,0 +1,8 @@
+/* 
+  InfoPlist.strings
+  QvPlayer
+
+  Created by GitHub Copilot.
+*/
+
+"NSLocalNetworkUsageDescription" = "QvPlayer 需要访问局域网以提供 Web 管理界面并发现本地媒体资源。";

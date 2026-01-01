@@ -98,6 +98,10 @@
 "items" = "个项目";
 "NOW PLAYING" = "正在播放";
 "Idle" = "空闲";
+
+/* About View */
+"Privacy Policy:" = "隐私政策：";
+"Support:" = "技术支持：";
 "Media" = "媒体库";
 "Groups" = "分组";
 "Upload" = "上传";
