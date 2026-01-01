@@ -19,6 +19,7 @@ QvPlayer is a powerful and flexible video player designed specifically for Apple
 *   **Smart Codec Detection**: Automatically detects unsupported codecs (like AV1 on older hardware) and suggests switching to the appropriate player engine.
 *   **Native tvOS UI**: Designed with SwiftUI for a seamless big-screen experience, supporting the Focus Engine.
 *   **Localization**: Fully localized in English and Simplified Chinese (简体中文).
+*   **Compliance**: Includes full [Privacy Policy](https://qvcloud.github.io/QvPlayer/privacy.html) and [Support](https://qvcloud.github.io/QvPlayer/support.html) pages.
 
 ## 🚀 Getting Started
 
@@ -32,7 +33,7 @@ QvPlayer is a powerful and flexible video player designed specifically for Apple
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/yourusername/QvPlayer.git
+    git clone https://github.com/qvcloud/QvPlayer.git
     cd QvPlayer
     ```
 
@@ -54,7 +55,7 @@ QvPlayer is a powerful and flexible video player designed specifically for Apple
 
 1.  **Web Transfer (Recommended)**:
     *   Open QvPlayer on your Apple TV.
-    *   Note the IP address displayed on the settings or home screen (e.g., `http://192.168.1.x:10001`).
+    *   Note the IP address displayed on the settings or home screen (e.g., `http://192.168.1.x:12345`).
     *   Open that URL in a web browser on your computer.
     *   **Upload Files**: Drag and drop video files into the web page.
     *   **Add Links**: Enter stream URLs or upload M3U files via the web interface.

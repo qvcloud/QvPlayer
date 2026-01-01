@@ -23,7 +23,7 @@ QvPlayer 是一款专为 Apple TV (tvOS) 设计的强大且灵活的视频播放
 *   **M3U 播放列表支持**: 支持导入和管理 M3U 格式的直播源。
 *   **原生 tvOS UI**: 使用 SwiftUI 设计，完美适配大屏幕操作体验，支持焦点引擎。
 *   **多语言支持**: 完全支持简体中文和英文。
-*   **合规性**: 包含完整的隐私政策和技术支持页面。
+*   **合规性**: 包含完整的 [隐私政策](https://qvcloud.github.io/QvPlayer/privacy.html) 和 [技术支持](https://qvcloud.github.io/QvPlayer/support.html) 页面。
 
 ## 🚀 快速开始
 
