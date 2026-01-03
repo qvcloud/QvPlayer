@@ -142,7 +142,7 @@ struct VideoListView: View {
     }
     
     private var videoGridView: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 500), spacing: 40)], spacing: 40) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 400, maximum: 600), spacing: 60)], spacing: 80) {
             ForEach(groups) { group in
                 Section(header: groupHeader(for: group)) {
                     ForEach(group.videos) { video in
@@ -151,25 +151,25 @@ struct VideoListView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom)
+        .padding(.horizontal, 60)
+        .padding(.bottom, 60)
     }
     
     private func groupHeader(for group: VideoGroup) -> some View {
         HStack {
             Text(group.name)
-                .font(.title2)
-                .fontWeight(.bold)
+                .font(.system(size: 44, weight: .bold))
                 .foregroundStyle(.primary)
-                .padding(.vertical, 12)
-                .padding(.leading, 20)
+                .padding(.vertical, 20)
             
             Spacer()
+            
+            Text("\(group.videos.count) items")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity) // Ensure header takes full width
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.bottom, 20)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
     }
     
     private func videoItem(for video: Video) -> some View {
@@ -178,7 +178,7 @@ struct VideoListView: View {
         } label: {
             VideoCard(video: video)
         }
-        .buttonStyle(.card)
+        .buttonStyle(.plain) // Use plain style to let VideoCard handle focus visuals
         .contextMenu {
             if video.cachedURL == nil {
                 Button {
@@ -253,70 +253,71 @@ struct VideoListView: View {
 
 struct VideoCard: View {
     let video: Video
+    @Environment(\.isFocused) var isFocused
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topTrailing) {
                 VideoThumbnailView(video: video)
                     .aspectRatio(16/9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .shadow(color: .black.opacity(isFocused ? 0.3 : 0.1), radius: isFocused ? 15 : 5, x: 0, y: isFocused ? 10 : 2)
+                    .scaleEffect(isFocused ? 1.05 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
                 
                 if video.cachedURL != nil {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(.green)
-                        .padding(6)
+                        .font(.system(size: 24))
+                        .padding(8)
                         .background(.ultraThinMaterial)
                         .clipShape(Circle())
-                        .padding(6)
+                        .padding(10)
                 } else if let latency = video.latency, !video.url.isFileURL, !video.url.absoluteString.hasPrefix("localcache://") {
                     Text(latency < 0 ? "Timeout" : "\(Int(latency))ms")
-                        .font(.caption2)
-                        .fontWeight(.bold)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
                         .background(
-                            latency < 0 ? Color.red :
-                            latency < 200 ? Color.green :
-                            latency < 500 ? Color.orange : Color.red
+                            latency < 0 ? Color.red.opacity(0.8) :
+                            latency < 200 ? Color.green.opacity(0.8) :
+                            latency < 500 ? Color.orange.opacity(0.8) : Color.red.opacity(0.8)
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                        .padding(6)
+                        .clipShape(Capsule())
+                        .padding(10)
                 }
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Text(video.title)
-                        .font(.headline)
+                        .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                     
                     if video.isLive, let count = video.sourceCount, count > 1 {
                         Text("\(count)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 8)
                             .padding(.vertical, 2)
-                            .background(Color.gray.opacity(0.7))
+                            .background(.secondary.opacity(0.5))
                             .clipShape(Capsule())
                     }
                 }
                 
                 if let description = video.description {
                     Text(description)
-                        .font(.caption)
+                        .font(.system(size: 20))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
             }
             .padding(.horizontal, 4)
-            .padding(.bottom, 4)
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+        .padding(12)
+        .background(isFocused ? Color.white.opacity(0.1) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 }

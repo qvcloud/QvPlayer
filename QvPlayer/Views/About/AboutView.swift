@@ -10,70 +10,90 @@ struct AboutView: View {
     }
     
     var body: some View {
-        VStack(spacing: 40) {
-            Image(systemName: "play.tv.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 200, height: 200)
-                .foregroundStyle(.tint)
-                .shadow(radius: 10)
+        VStack(spacing: 60) {
+            Spacer()
             
-            VStack(spacing: 16) {
-                Text("QvPlayer")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+            VStack(spacing: 30) {
+                Image(systemName: "play.tv.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 240, height: 240)
+                    .foregroundStyle(.tint)
+                    .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
                 
-                Text(String(format: NSLocalizedString("Version %@ (Build %@)", comment: "Version info"), appVersion, buildNumber))
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                
-                Text("Designed for Apple TV")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                
+                VStack(spacing: 12) {
+                    Text("QvPlayer")
+                        .font(.system(size: 80, weight: .black, design: .rounded))
+                        .foregroundStyle(.primary)
+                    
+                    Text(String(format: NSLocalizedString("Version %@ (Build %@)", comment: "Version info"), appVersion, buildNumber))
+                        .font(.system(size: 32, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            VStack(spacing: 40) {
                 if let serverURL = WebServer.shared.serverURL {
-                    VStack(spacing: 8) {
-                        Text("Manage Playlist via Web Browser:")
-                            .font(.headline)
-                            .foregroundColor(.primary)
+                    VStack(spacing: 12) {
+                        Text(NSLocalizedString("Manage Playlist via Web Browser:", comment: ""))
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundColor(.secondary)
                         Text(serverURL)
-                            .font(.title2)
-                            .fontWeight(.bold)
+                            .font(.system(size: 48, weight: .bold, design: .monospaced))
                             .foregroundColor(.blue)
                     }
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(12)
-                }
-            }
-            
-            VStack(spacing: 12) {
-                HStack {
-                    Text(NSLocalizedString("Privacy Policy:", comment: ""))
-                        .foregroundColor(.secondary)
-                    Text("https://qvcloud.github.io/QvPlayer/privacy.html")
-                        .foregroundColor(.blue)
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 30)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 24))
                 }
                 
-                HStack {
-                    Text(NSLocalizedString("Support:", comment: ""))
-                        .foregroundColor(.secondary)
-                    Text("https://qvcloud.github.io/QvPlayer/support.html")
-                        .foregroundColor(.blue)
+                VStack(spacing: 16) {
+                    LinkItem(label: NSLocalizedString("Privacy Policy:", comment: ""), url: "https://qvcloud.github.io/QvPlayer/privacy.html")
+                    LinkItem(label: NSLocalizedString("Support:", comment: ""), url: "https://qvcloud.github.io/QvPlayer/support.html")
                 }
             }
-            .font(.caption)
             
             Spacer()
-                .frame(height: 50)
             
-            Text("© 2025 Easton. All rights reserved.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Text("© 2026 qvcloud. All rights reserved.")
+                .font(.system(size: 20))
+                .foregroundColor(.secondary.opacity(0.6))
+                .padding(.bottom, 40)
         }
-        .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.2)) // Subtle background
+        .background(
+            ZStack {
+                Color.black
+                LinearGradient(colors: [.blue.opacity(0.15), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+            .ignoresSafeArea()
+        )
+    }
+}
+
+struct LinkItem: View {
+    let label: String
+    let url: String
+    @Environment(\.isFocused) var isFocused
+    
+    var body: some View {
+        Button(action: {
+            // Links are usually just for display on tvOS, but we can make them focusable
+        }) {
+            HStack(spacing: 10) {
+                Text(label)
+                    .foregroundColor(.secondary)
+                Text(url)
+                    .foregroundColor(.blue)
+            }
+            .font(.system(size: 24))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(isFocused ? Color.white.opacity(0.1) : Color.clear)
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

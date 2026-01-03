@@ -18,32 +18,43 @@ struct VideoThumbnailView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .layoutPriority(-1)
+                
+                // Subtle gradient overlay for better text contrast if needed
+                LinearGradient(
+                    gradient: Gradient(colors: [.clear, .black.opacity(0.3)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             } else {
                 ZStack {
                     Image(systemName: video.isLive ? "antenna.radiowaves.left.and.right" : "play.tv.fill")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 50, height: 50)
-                        .foregroundStyle(.secondary)
-                        .opacity(isLoading ? 0.5 : 1)
+                        .frame(width: 60, height: 60)
+                        .foregroundStyle(.secondary.opacity(0.5))
                     
                     if video.isLive {
                         VStack {
                             Spacer()
-                            Text("LIVE")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.red)
-                                .foregroundColor(.white)
-                                .cornerRadius(4)
-                                .padding(.bottom, 8)
+                            HStack {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                Text("LIVE")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .padding(.bottom, 12)
                         }
                     }
                 }
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .task {
             await generateThumbnail()
         }

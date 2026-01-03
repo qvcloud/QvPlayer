@@ -247,22 +247,21 @@ struct PlayerView: View {
     var tipsOverlay: some View {
         if showTips, let message = tipsMessage {
             VStack {
-                HStack(spacing: 15) {
+                HStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.white)
-                        .font(.system(size: 30))
+                        .foregroundColor(.orange)
+                        .font(.system(size: 40))
                     Text(message)
-                        .font(.system(size: 24, weight: .medium))
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.leading)
                 }
-                .padding(20)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.85))
-                        .shadow(radius: 10)
-                )
-                .padding(.top, 60)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 25)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 24))
+                .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+                .padding(.top, 80)
                 Spacer()
             }
             .transition(.move(edge: .top).combined(with: .opacity))
@@ -275,45 +274,43 @@ struct PlayerView: View {
         if viewModel.showSourceList {
             GeometryReader { geometry in
                 HStack {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 20) {
                         Text(video.tvgName ?? video.title)
-                            .font(.headline)
+                            .font(.system(size: 36, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.bottom, 5)
+                            .padding(.bottom, 10)
                         
                         ScrollViewReader { proxy in
                             ScrollView {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 8) {
                                     ForEach(viewModel.sourceList) { src in
                                         sourceListItem(src: src)
                                     }
                                 }
+                                .padding(.trailing, 10)
                             }
-                            .focusable(false) // Ensure ScrollView doesn't steal focus
-                            .frame(maxHeight: geometry.size.height * 0.6)
+                            .focusable(false)
+                            .frame(maxHeight: geometry.size.height * 0.7)
                             .onChange(of: viewModel.highlightedVideo) { _, newVideo in
                                 if let video = newVideo {
-                                    withAnimation {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                         proxy.scrollTo(video.id, anchor: .center)
                                     }
                                 }
                             }
                             .onAppear {
-                                // Initial scroll to current video
                                 if let video = viewModel.currentVideo {
                                     proxy.scrollTo(video.id, anchor: .center)
                                 }
                             }
                         }
                     }
-                    .padding()
-                    .frame(width: 600)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.black.opacity(0.85))
-                            .shadow(radius: 10)
-                    )
-                    .padding(.leading, 40)
+                    .padding(40)
+                    .frame(width: 700)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 32))
+                    .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 15)
+                    .padding(.leading, 60)
                     Spacer()
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -328,16 +325,14 @@ struct PlayerView: View {
         if showChannelInfo {
             VStack {
                 Text(channelInfoText)
-                    .font(.system(size: 40, weight: .bold))
+                    .font(.system(size: 56, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 40)
-                    .padding(.vertical, 20)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.black.opacity(0.7))
-                            .shadow(radius: 10)
-                    )
-                    .padding(.top, 60)
+                    .padding(.horizontal, 60)
+                    .padding(.vertical, 30)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 30))
+                    .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+                    .padding(.top, 100)
                 Spacer()
             }
             .transition(.move(edge: .top).combined(with: .opacity))
@@ -356,42 +351,48 @@ struct PlayerView: View {
         let filename = src.url.lastPathComponent
         let displayString = host.isEmpty ? src.url.absoluteString : "\(host)\(port)/.../\(filename)"
         
-        HStack(spacing: 4) {
+        HStack(spacing: 12) {
             if isPlaying {
                 Image(systemName: "play.fill")
-                    .font(.caption)
+                    .font(.system(size: 20))
                     .foregroundColor(.green)
-                    .frame(width: 28, alignment: .trailing)
+                    .frame(width: 32, alignment: .center)
             } else {
                 if let index = viewModel.sourceList.firstIndex(where: { $0.id == src.id }) {
-                    Text("\(index + 1).")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .frame(width: 28, alignment: .trailing)
+                    Text("\(index + 1)")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, alignment: .center)
                 }
             }
             
             Text(displayString)
-                .font(.caption)
+                .font(.system(size: 24, weight: isPlaying ? .bold : .regular))
                 .foregroundColor(isPlaying ? .green : .white)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .layoutPriority(1)
             
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
             
             if let latency = src.latency {
                 Text("\(Int(latency))ms")
-                    .font(.caption2)
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundColor(latency < 0 ? .red : (latency < 500 ? .green : .yellow))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.3))
+                    .clipShape(Capsule())
             }
         }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHighlighted ? Color.white.opacity(0.2) : (isPlaying ? Color.white.opacity(0.1) : Color.clear))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isHighlighted ? Color.white.opacity(0.25) : (isPlaying ? Color.white.opacity(0.1) : Color.clear))
         )
+        .scaleEffect(isHighlighted ? 1.02 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHighlighted)
         .id(src.id)
     }
     
@@ -399,54 +400,17 @@ struct PlayerView: View {
     
     @ViewBuilder
     func playerControls(isPlaying: Bool, onPlayPause: @escaping () -> Void, onSeek: @escaping (Double) -> Void) -> some View {
-        HStack(spacing: 40) {
+        HStack(spacing: 60) {
             if !video.isLive {
-                Button(action: { onSeek(-10) }) {
-                    Image(systemName: "gobackward.10")
-                        .font(.system(size: 40))
-                        .padding()
-                        .background(
-                            Circle()
-                                .fill(focusedField == .rewind ? Color.white.opacity(0.3) : Color.clear)
-                        )
-                        .scaleEffect(focusedField == .rewind ? 1.2 : 1.0)
-                        .animation(.spring(), value: focusedField)
-                }
-                .buttonStyle(.plain)
-                .focused($focusedField, equals: .rewind)
+                controlButton(icon: "gobackward.10", field: .rewind) { onSeek(-10) }
             }
 
-            Button(action: { onPlayPause() }) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 40))
-                    .padding()
-                    .background(
-                        Circle()
-                            .fill(focusedField == .playPause ? Color.white.opacity(0.3) : Color.clear)
-                    )
-                    .scaleEffect(focusedField == .playPause ? 1.2 : 1.0)
-                    .animation(.spring(), value: focusedField)
-            }
-            .buttonStyle(.plain)
-            .focused($focusedField, equals: .playPause)
+            controlButton(icon: isPlaying ? "pause.fill" : "play.fill", field: .playPause, size: 60) { onPlayPause() }
             
             if !video.isLive {
-                Button(action: { onSeek(10) }) {
-                    Image(systemName: "goforward.10")
-                        .font(.system(size: 40))
-                        .padding()
-                        .background(
-                            Circle()
-                                .fill(focusedField == .fastForward ? Color.white.opacity(0.3) : Color.clear)
-                        )
-                        .scaleEffect(focusedField == .fastForward ? 1.2 : 1.0)
-                        .animation(.spring(), value: focusedField)
-                }
-                .buttonStyle(.plain)
-                .focused($focusedField, equals: .fastForward)
+                controlButton(icon: "goforward.10", field: .fastForward) { onSeek(10) }
             }
             
-            // Audio Track Selection
             if !viewModel.audioTracks.isEmpty {
                 Menu {
                     ForEach(viewModel.audioTracks, id: \.self) { track in
@@ -462,21 +426,12 @@ struct PlayerView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 30))
-                        .padding()
-                        .background(
-                            Circle()
-                                .fill(focusedField == .audioTrack ? Color.white.opacity(0.3) : Color.clear)
-                        )
-                        .scaleEffect(focusedField == .audioTrack ? 1.2 : 1.0)
-                        .animation(.spring(), value: focusedField)
+                    controlIcon(icon: "waveform", field: .audioTrack)
                 }
                 .buttonStyle(.plain)
                 .focused($focusedField, equals: .audioTrack)
             }
             
-            // Playback Speed
             Menu {
                 ForEach([0.5, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
                     Button(action: {
@@ -491,22 +446,41 @@ struct PlayerView: View {
                     }
                 }
             } label: {
-                Image(systemName: "gauge")
-                    .font(.system(size: 30))
-                    .padding()
-                    .background(
-                        Circle()
-                            .fill(focusedField == .playbackSpeed ? Color.white.opacity(0.3) : Color.clear)
-                    )
-                    .scaleEffect(focusedField == .playbackSpeed ? 1.2 : 1.0)
-                    .animation(.spring(), value: focusedField)
+                controlIcon(icon: "gauge", field: .playbackSpeed)
             }
             .buttonStyle(.plain)
             .focused($focusedField, equals: .playbackSpeed)
         }
-        .padding(.bottom, 60)
+        .padding(.horizontal, 60)
+        .padding(.vertical, 30)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .padding(.bottom, 80)
         .opacity(showControls || (focusedField != nil && focusedField != .ksPlayer && focusedField != .systemPlayer) ? 1 : 0)
-        .animation(.easeInOut, value: showControls || (focusedField != nil && focusedField != .ksPlayer && focusedField != .systemPlayer))
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showControls || (focusedField != nil && focusedField != .ksPlayer && focusedField != .systemPlayer))
+    }
+    
+    @ViewBuilder
+    private func controlButton(icon: String, field: FocusField, size: CGFloat = 45, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            controlIcon(icon: icon, field: field, size: size)
+        }
+        .buttonStyle(.plain)
+        .focused($focusedField, equals: field)
+    }
+    
+    @ViewBuilder
+    private func controlIcon(icon: String, field: FocusField, size: CGFloat = 45) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: size))
+            .foregroundColor(.white)
+            .padding(20)
+            .background(
+                Circle()
+                    .fill(focusedField == field ? Color.white.opacity(0.3) : Color.clear)
+            )
+            .scaleEffect(focusedField == field ? 1.2 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: focusedField)
     }
     
     // MARK: - Helpers
